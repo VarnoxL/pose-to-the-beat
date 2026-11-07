@@ -1,5 +1,6 @@
 // Entry point. Game track owns this file; it wires vision -> scoring -> game.
 //   (default)       live webcam, 1v1; press B on the title for you vs bot
+//   ?bot            SPACE on the title starts you vs bot (same as pressing B)
 //   ?demo           two bots, no camera (dev / backup video)
 //   ?replay=<name>  feed public/assets/sessions/<name>.json instead of the camera
 import { config } from "./config";
@@ -16,6 +17,7 @@ const replay = params.get("replay");
 
 const scoring = createScoring(await loadMoves());
 const game = createGame(canvas, scoring, {
+  spaceMode: params.has("bot") ? "bot" : "duo",
   onNewChallenger: (side, mode) => { if (demo || (mode === "bot" && side === 1)) bots.replace(side); },
 });
 const bots = startBots(game.onFrame, game.now, game.upcoming, () => (demo ? [0, 1] : game.mode === "bot" ? [1] : []));
