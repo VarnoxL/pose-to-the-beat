@@ -1,0 +1,14 @@
+{
+  "id": "sumo_squat",
+  "name": "sumo squat",
+  "target": {
+    "leftElbow": 117,
+    "rightElbow": 129,
+    "leftShoulder": 37,
+    "rightShoulder": 36,
+    "leftHip": 125,
+    "rightHip": 118,
+    "leftKnee": 127,
+    "rightKnee": 110
+  }
+}

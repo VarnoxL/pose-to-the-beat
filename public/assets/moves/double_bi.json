@@ -1,0 +1,14 @@
+{
+  "id": "double_bi",
+  "name": "double bi",
+  "target": {
+    "leftElbow": 72,
+    "rightElbow": 70,
+    "leftShoulder": 98,
+    "rightShoulder": 90,
+    "leftHip": 176,
+    "rightHip": 166,
+    "leftKnee": 178,
+    "rightKnee": 174
+  }
+}
