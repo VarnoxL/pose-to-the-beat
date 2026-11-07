@@ -16,10 +16,10 @@ Each track's agent works only inside its own folder, on its own branch:
 | `track/vision` | `src/vision` | webcam, landmarks, One Euro smoothing, angles, `PlayerFrame`, recorder and replay |
 | `track/scoring` | `src/scoring` | angle matching, grades, flow, lives, tempo tier, traps, move sequence, elimination |
 | `track/game` | `src/game`, `src/main.ts`, `index.html` | audio clock, music, screens, drawing, HUD, lag screen |
-| `track/content` | `assets/` | songs, voice lines, moves, sessions, SFX, `CREDITS.md` |
+| `track/content` | `public/assets/` | songs, voice lines, moves, sessions, SFX, `CREDITS.md` |
 
 - **Shared files:** `src/types.ts` and `src/config.ts`. Change them only with a small PR to `main`, and tell the other tracks. Never change a shared type silently inside a track branch.
-- Until the real pieces connect, build against the shapes in `types.ts` using mock data or replay JSON from `assets/sessions/`.
+- Until the real pieces connect, build against the shapes in `types.ts` using mock data or replay JSON from `public/assets/sessions/`.
 - Merge `main` into your branch often. All tracks merge to `main` by hour 14.
 
 ## Rules
@@ -27,7 +27,7 @@ Each track's agent works only inside its own folder, on its own branch:
 - **Time everything to `AudioContext.currentTime`**, never to `performance.now()` or frame time.
 - **The view is mirrored.** Draw with `ctx.scale(-1, 1)`. Never swap L/R joints.
 - **Never generate art, music, or sound.** Code-drawn visuals (skeletons, shapes, particles) are fine.
-- Any free asset you add gets a line in `assets/CREDITS.md`, with its license.
+- Any free asset you add gets a line in `public/assets/CREDITS.md`, with its license.
 - Any simplification or fallback you take gets a line in `SIMPLIFICATIONS.md`.
 - Keep it small. This is a 48-hour jam: no new dependencies without asking, and no abstractions for one use.
 - When done, run the thing and report what you saw.

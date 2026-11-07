@@ -8,13 +8,13 @@ export const config = {
   // Beat structure
   beatsPerMove: 2, // a new move every N beats
   previewBeats: 1, // the character shows the move this many beats before it's scored
-  trapChance: 0.15, // per move, after the first few moves
-  noTrapsBeforeMove: 3, // the first moves are never traps
+  trapChance: 0.15, // per move, once traps are allowed
+  noTrapsBeforeMove: 3, // moves with index < 3 (0-based, per round) are never traps
 
   // Scoring (mean absolute angle error in degrees, over visible joints)
   scoreWindowMs: 150, // best match within ±window around the beat counts
   perfectMaxErrorDeg: 15,
-  goodMaxErrorDeg: 30, // also the trap threshold: >= good on a trap = eliminated
+  goodMaxErrorDeg: 30, // also the trap threshold: error <= this on a trap = eliminated
   jointWeights: {
     leftElbow: 1, rightElbow: 1,
     leftShoulder: 1, rightShoulder: 1,

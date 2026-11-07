@@ -15,7 +15,7 @@ export type Point = { x: number; y: number; z: number; visibility: number };
 /** One tracked player at one instant. id 0 = left half of the SCREEN (mirrored view). */
 export type PlayerFrame = {
   id: 0 | 1;
-  t: number; // AudioContext.currentTime seconds, lag offset already applied
+  t: number; // seconds: audioCtx.currentTime - lagOffsetMs / 1000
   angles: Record<Joint, number>; // degrees, 0..180, smoothed
   landmarks: Point[]; // all 33 MediaPipe landmarks, smoothed
   confidence: number; // 0..1, mean visibility of the landmarks the 8 joints use
@@ -45,5 +45,5 @@ export type PlayerState = {
   alive: boolean;
 };
 
-/** A saved move file in assets/moves/<id>.json. */
+/** A saved move file in public/assets/moves/<id>.json. */
 export type MoveDef = { id: string; name: string; target: Record<Joint, number> };
