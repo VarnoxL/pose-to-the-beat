@@ -54,6 +54,17 @@ export const config = {
   lagCalibrationBeats: 8,
   lagCalibrationMinSamples: 4,
 
+  // Bot opponent (key B on the title screen)
+  bot: {
+    skillMin: 0.8, // chance to copy a sung move; each new bot rolls between min and max
+    skillMax: 0.95,
+    trapGullibility: 0.25, // chance to copy a trap move
+    reactSec: 0.45, // starts moving this long before the beat
+    speed: 14, // pose ease rate per second
+    noiseDeg: 14, // max per-joint error when it copies
+    fps: 30,
+  },
+
   // Sync: camera + speaker latency. Hidden L screen overrides this via localStorage.
   lagOffsetMsDefault: 120,
   lagOffsetStorageKey: "ptb.lagOffsetMs",

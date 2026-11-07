@@ -12,12 +12,12 @@ type Popup = { player: 0 | 1 | null; text: string; color: string; time: number }
 export type Upcoming = { move: Move; beatTime: number } | null;
 
 const COLORS = ["#2de2e6", "#ff3cac"] as const;
-const NAMES = ["P1", "P2"] as const;
+export type Mode = "duo" | "bot"; // duo = 1v1 humans (main mode); bot = one human (left) vs a bot (right)
 const GOLD = "#ffd23f";
 const RED = "#ff5555";
 const IDS = [0, 1] as const;
 
-export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1) => void } = {}) {
+export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1, mode: Mode) => void } = {}) {
   const ctx = canvas.getContext("2d")!;
   const audio = new AudioContext();
   const music = new Music(audio);
@@ -29,6 +29,10 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   addEventListener("pointerdown", resume);
 
   let screen: Screen = "title";
+  let mode: Mode = "duo";
+  let status = ""; // shown on the title screen (camera errors etc.)
+  const NAMES = () => (mode === "bot" ? ["YOU", "BOT"] : ["P1", "P2"]);
+  const verb = (id: number, they: string, you: string) => (mode === "bot" && id === 0 ? you : they);
   let screenUntil = 0;
   let champion: 0 | 1 | null = null;
   let crownKept = false;
@@ -135,7 +139,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       screenUntil = audio.currentTime + config.championScreenSec;
     } else if (screen === "champion") {
       screen = "challenger";
-      opts.onNewChallenger?.((1 - winner) as 0 | 1);
+      opts.onNewChallenger?.((1 - winner) as 0 | 1, mode);
     }
   }
 
@@ -203,12 +207,18 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     if (e.repeat) return;
     if (e.code === "Space") {
       e.preventDefault();
+      if (screen === "title") mode = "duo";
       if (screen === "title" || screen === "challenger") void startRound();
       else if (screen === "lag") lagDone ? void startLag() : lagSample(audio.currentTime, lagTap);
+    } else if (e.code === "KeyB" && screen === "title") {
+      mode = "bot";
+      champion = null;
+      void startRound();
     } else if (e.code === "KeyL" && (screen === "title" || screen === "challenger")) {
       void startLag();
     } else if (e.code === "Escape") {
       music.stop();
+      if (screen !== "lag") champion = null; // back to the menu: fresh crown
       screen = screen === "lag" ? lagReturn : "title";
     }
   });
@@ -323,7 +333,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     for (const id of IDS) {
       const s = st[id];
       const x = id === 0 ? W * 0.18 : W * 0.82;
-      const name = `${NAMES[id]}${champion === id ? " 👑" : ""}`;
+      const name = `${NAMES()[id]}${champion === id ? " 👑" : ""}`;
       text(name, x, H * 0.05, size, COLORS[id]);
       text(String(s.score), x, H * 0.11, size * 1.4);
       text(s.combo > 1 ? `x${s.combo} combo` : "", x, H * 0.17, size * 0.7, "#ccc");
@@ -403,32 +413,41 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     }
 
     const st = scoring.state;
-    const scores = `${NAMES[0]} ${st[0].score}  —  ${NAMES[1]} ${st[1].score}`;
+    const scores = `${NAMES()[0]} ${st[0].score}  —  ${NAMES()[1]} ${st[1].score}`;
     if (screen === "title") {
       drawOverlay([
         ["POSE TO THE BEAT", 2.4, GOLD],
         ["Keep the flow. Don't break the beat.", 0.9, "#ccc"],
         ["", 0.5],
-        ["Two players, side by side. Copy the move when the character SINGS it.", 0.8],
+        ["Copy the move when the character SINGS it.", 0.8],
         ["No song? Don't move. That's a trap.", 0.8, RED],
         ["", 0.5],
-        ["Press SPACE to start", 1.2, "#fff"],
+        ["SPACE  ·  1v1, two players side by side", 1.1, "#fff"],
+        ["B  ·  you vs the bot (stand on the left)", 0.9, "#ccc"],
+        [status, 0.6, RED],
       ], W, H);
     } else if (screen === "eliminated") {
-      const head = endReason === "time" ? "TIME!" : out[0] && out[1] ? "BOTH OUT" : `${NAMES[out[0] ? 0 : 1]} IS OUT`;
+      const head = endReason === "time" ? "TIME!" : out[0] && out[1] ? "BOTH OUT" : `${NAMES()[out[0] ? 0 : 1]} ${verb(out[0] ? 0 : 1, "IS", "ARE")} OUT`;
       drawOverlay([[head, 2.4, endReason === "time" ? GOLD : RED], [scores, 1]], W, H);
     } else if (screen === "champion") {
       drawOverlay([
-        [`${NAMES[winner]} ${crownKept ? "KEEPS" : "TAKES"} THE CROWN`, 2, COLORS[winner]],
+        [`${NAMES()[winner]} ${crownKept ? verb(winner, "KEEPS", "KEEP") : verb(winner, "TAKES", "TAKE")} THE CROWN`, 2, COLORS[winner]],
         ["👑", 3],
         [scores, 1],
+      ], W, H);
+    } else if (screen === "challenger" && mode === "bot") {
+      drawOverlay([
+        ["REMATCH?", 2.2, GOLD],
+        [winner === 1 ? "The bot keeps the crown. Take it back!" : "A new bot steps up.", 1, COLORS[1]],
+        ["", 0.5],
+        ["SPACE to play  ·  ESC for menu", 1.1],
       ], W, H);
     } else if (screen === "challenger") {
       const side = winner === 0 ? "RIGHT" : "LEFT";
       drawOverlay([
         ["NEW CHALLENGER!", 2.2, GOLD],
-        [`${NAMES[1 - winner]}: step into the ${side} side`, 1, COLORS[1 - winner]],
-        [`${NAMES[winner]} (champion) stays put`, 0.8, COLORS[winner]],
+        [`${NAMES()[1 - winner]}: step into the ${side} side`, 1, COLORS[1 - winner]],
+        [`${NAMES()[winner]} (champion) stays put`, 0.8, COLORS[winner]],
         ["", 0.5],
         ["Press SPACE when ready", 1.2],
       ], W, H);
@@ -457,6 +476,8 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     now,
     onFrame,
     setVideo: (v: HTMLVideoElement) => void (video = v),
+    setStatus: (s: string) => void (status = s),
+    get mode() { return mode; },
     /** The next unscored move the character is showing, for fake/bot players. */
     upcoming(): Upcoming {
       if (screen !== "round") return null;
