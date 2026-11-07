@@ -41,6 +41,19 @@ export const config = {
   // Vision
   oneEuro: { minCutoff: 1.0, beta: 0.007, dCutoff: 1.0 },
 
+  // Game: screens and timing
+  leadInBeats: 4, // one measure of music before the first move is scored
+  startDelaySec: 0.3, // gap between pressing start and beat 0, so audio can be scheduled
+  scheduleAheadSec: 0.2, // audio lookahead; tempo for a measure is decided this early
+  eliminatedScreenSec: 2,
+  championScreenSec: 3,
+  popupSec: 0.8, // how long PERFECT / GOOD / MISS stays up
+  characterPoseLerp: 12, // per second; how fast the character eases into the next pose
+  musicGain: 0.8,
+  lagCalibrationBpm: 100,
+  lagCalibrationBeats: 8,
+  lagCalibrationMinSamples: 4,
+
   // Sync: camera + speaker latency. Hidden L screen overrides this via localStorage.
   lagOffsetMsDefault: 120,
   lagOffsetStorageKey: "ptb.lagOffsetMs",
