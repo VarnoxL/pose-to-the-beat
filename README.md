@@ -16,7 +16,8 @@ npm run dev
 git clone https://github.com/VarnoxL/pose-to-the-beat.git
 cd pose-to-the-beat
 npm install
-git switch track/<vision|scoring|game|content>
+git switch -c <your-branch>        # create your own branch off main
+git push -u origin <your-branch>
 ```
 
 First prompt for your track's agent:

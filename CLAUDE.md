@@ -9,14 +9,14 @@ TypeScript + Vite, MediaPipe Pose Landmarker (`@mediapipe/tasks-vision`), Canvas
 - `npm run build` typechecks and builds to `dist/`. Run it before every push.
 
 ## Ownership
-Each track's agent works only inside its own folder, on its own branch:
+Each track's agent works only inside its own folder, on a branch its owner creates from `main`:
 
-| Branch | Folder | Owns |
-|--------|--------|------|
-| `track/vision` | `src/vision` | webcam, landmarks, One Euro smoothing, angles, `PlayerFrame`, recorder and replay |
-| `track/scoring` | `src/scoring` | angle matching, grades, flow, lives, tempo tier, traps, move sequence, elimination |
-| `track/game` | `src/game`, `src/main.ts`, `index.html` | audio clock, music, screens, drawing, HUD, lag screen |
-| `track/content` | `public/assets/` | songs, voice lines, moves, sessions, SFX, `CREDITS.md` |
+| Track | Folder | Owns |
+|-------|--------|------|
+| vision | `src/vision` | webcam, landmarks, One Euro smoothing, angles, `PlayerFrame`, recorder and replay |
+| scoring | `src/scoring` | angle matching, grades, flow, lives, tempo tier, traps, move sequence, elimination |
+| game | `src/game`, `src/main.ts`, `index.html` | audio clock, music, screens, drawing, HUD, lag screen |
+| content | `public/assets/` | songs, voice lines, moves, sessions, SFX, `CREDITS.md` |
 
 - **Shared files:** `src/types.ts` and `src/config.ts`. Change them only with a small PR to `main`, and tell the other tracks. Never change a shared type silently inside a track branch.
 - Until the real pieces connect, build against the shapes in `types.ts` using mock data or replay JSON from `public/assets/sessions/`.
