@@ -307,7 +307,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
         ctx.strokeStyle = shown.p.move.cue === "sing" ? "rgba(255,210,63,0.8)" : "rgba(255,255,255,0.35)";
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(cx, cy, r0 * (1 + Math.min(1.5, until / spb)), 0, Math.PI * 2);
+        ctx.arc(cx, cy, r0 * (1 + 1.5 * Math.min(1, until / (config.previewBeats * spb))), 0, Math.PI * 2);
         ctx.stroke();
       }
       ctx.strokeStyle = "rgba(255,255,255,0.2)";
@@ -315,6 +315,15 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       ctx.beginPath();
       ctx.arc(cx, cy, r0, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    // Beat count under the character: 1 · 2 · 3 · POSE!
+    if (shown && track) {
+      const spb = 60 / track.at(audio.currentTime).bpm;
+      const until = shown.beatTime - audio.currentTime;
+      const left = Math.round(until / spb);
+      if (left >= 1) text(String(config.previewBeats - left + 1), cx, rect.y + h + H * 0.05, Math.round(H / 16), "#fff");
+      else if (until > -spb / 2) text("POSE!", cx, rect.y + h + H * 0.05, Math.round(H / 14), GOLD);
     }
 
     const lm = poseToLandmarks(charPose, 0.5, 0.62, 0.7, w / h);

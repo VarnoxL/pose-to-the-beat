@@ -6,8 +6,8 @@ export const config = {
   startingLives: 2, // a miss costs 1, a trap fail is instant elimination
 
   // Beat structure
-  beatsPerMove: 2, // a new move every N beats
-  previewBeats: 1, // the character shows the move this many beats before it's scored
+  beatsPerMove: 4, // a new move every N beats: shown on beat 1, posed on beat 4
+  previewBeats: 3, // the character shows the move this many beats before it's scored
   trapChance: 0.15, // per move, once traps are allowed
   noTrapsBeforeMove: 3, // moves with index < 3 (0-based, per round) are never traps
 
@@ -32,17 +32,18 @@ export const config = {
   // Tempo tiers follow the LEADER's flow; changes only land on a measure boundary
   beatsPerMeasure: 4,
   tempoTiers: [
-    { bpm: 100, minFlow: 0 },
-    { bpm: 115, minFlow: 0.35 },
-    { bpm: 130, minFlow: 0.6 },
-    { bpm: 145, minFlow: 0.85 },
+    { bpm: 78, minFlow: 0 },
+    { bpm: 86, minFlow: 0.2 },
+    { bpm: 100, minFlow: 0.4 },
+    { bpm: 107, minFlow: 0.6 },
+    { bpm: 132, minFlow: 0.8 },
   ],
 
   // Vision
   oneEuro: { minCutoff: 1.0, beta: 0.007, dCutoff: 1.0 },
 
   // Game: screens and timing
-  leadInBeats: 4, // one measure of music before the first move is scored
+  leadInBeats: 3, // first move is scored on beat index 3 = the 4th beat of the first measure
   startDelaySec: 0.3, // gap between pressing start and beat 0, so audio can be scheduled
   scheduleAheadSec: 0.2, // audio lookahead; tempo for a measure is decided this early
   eliminatedScreenSec: 2,
