@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scoring Branch Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600&family=Archivo+Black&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column; diagrams and tables scroll inside their own boxes. */
+:root {
+  --bg: #f5f4fa; --surface: #ffffff; --fg: #1d1a2e; --muted: #5d5873; --line: #dcd8ea;
+  --accent: #c2185b;
+  --perfect: #a8790a; --good: #2e7d1f; --miss: #c62828;
+  --perfect-bg: #fff3c4; --good-bg: #e2f5d8; --miss-bg: #fde0e0;
+  --display: "Archivo Black", "Arial Black", system-ui, sans-serif;
+  --body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15131f; --surface: #1e1b2c; --fg: #ece9f6; --muted: #a49fbb; --line: #34304a;
+  --accent: #ff5c9a;
+  --perfect: #ffd23f; --good: #7cfc00; --miss: #ff5555;
+  --perfect-bg: #3a3112; --good-bg: #1f3313; --miss-bg: #3d1a1d;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #15131f; --surface: #1e1b2c; --fg: #ece9f6; --muted: #a49fbb; --line: #34304a;
+  --accent: #ff5c9a;
+  --perfect: #ffd23f; --good: #7cfc00; --miss: #ff5555;
+  --perfect-bg: #3a3112; --good-bg: #1f3313; --miss-bg: #3d1a1d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 48px 80px;
+}
+main { max-width: 860px; margin: 0 auto; display: grid; gap: 56px; }
+h1, h2 { font-family: var(--display); font-weight: 400; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 6vw, 3.2rem); }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1rem; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+section { display: grid; gap: 16px; min-width: 0; }
+.eyebrow { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--muted); font-size: 1.1rem; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+.status { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { font: 600 0.78rem var(--mono); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.pill.ok { color: var(--good); border-color: var(--good); }
+.pill.todo { color: var(--accent); border-color: var(--accent); }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; overflow-x: auto; }
+.diagram pre.mermaid { margin: 0; display: flex; justify-content: center; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.72rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.g { font: 600 0.75rem var(--mono); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.g.perfect { color: var(--perfect); background: var(--perfect-bg); }
+.g.good { color: var(--good); background: var(--good-bg); }
+.g.miss { color: var(--miss); background: var(--miss-bg); }
+ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+.files { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.file { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.file code { color: var(--accent); overflow-wrap: anywhere; }
+.file span { color: var(--muted); font-size: 0.9rem; }
+.tag { font: 600 0.68rem var(--mono); color: var(--muted); }
+.sessions { display: grid; gap: 24px; }
+</style>
+</head>
+<body>
+<main>
+
+<header style="display:grid;gap:14px">
+  <div class="eyebrow">Pose to the Beat · branch <code>scoring</code> · 2026-11-07</div>
+  <h1>Scoring Branch Report</h1>
+  <p class="lede">Real scoring replaces the stand-in in <code>src/game/fake.ts</code>. It decides perfect, good or miss for each move, costs lives, springs traps, picks the champion, sets the tempo and deals the moves.</p>
+  <div class="status">
+    <span class="pill ok">rule tests pass</span>
+    <span class="pill ok">npm run build passes</span>
+    <span class="pill ok">code review: no findings</span>
+    <span class="pill todo">not yet played in a browser</span>
+    <span class="pill todo">not committed</span>
+  </div>
+</header>
+
+<section>
+  <div class="eyebrow">Where scoring sits</div>
+  <h2>Who calls whom</h2>
+  <p>Vision sends frames in, game asks for moves and grades, and scoring keeps each player's state. Game calls <code>scoreMove</code> only after a move's scoring window has closed.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  V["vision<br/>webcam or replay"] -- "PlayerFrame" --> A["addFrame<br/>buffer per player"]
+  B["bots"] -- "PlayerFrame" --> A
+  subgraph S["src/scoring"]
+    A
+    N["nextMove<br/>deal + trap roll"]
+    M["scoreMove<br/>grade + events"]
+    T["tempoBpm<br/>one tier step"]
+    ST[("state<br/>score · combo · flow · lives")]
+  end
+  G["game<br/>beat clock · screens · HUD"] -- "3 beats ahead" --> N
+  G -- "window closed" --> M
+  G -- "each measure" --> T
+  M -- "GameEvent[]" --> G
+  ST -. "read for HUD" .-> G
+  </pre></div>
+</section>
+
+<section>
+  <div class="eyebrow">One move, start to finish</div>
+  <h2>The move's timeline</h2>
+  <p>A new move comes every 4 beats. The character shows it 3 beats early, then each player's best frame within ±150 ms of the beat counts.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant G as game
+  participant S as scoring
+  participant P as players
+  G->>S: nextMove(beat + 3)
+  S-->>G: Move (sing or trap)
+  Note over G: character shows the pose<br/>and sings it, unless it's a trap
+  P->>S: addFrame(...) every camera frame
+  Note over S: the beat, ±150 ms window
+  G->>S: scoreMove(move, beatTime)
+  S-->>G: hit / miss / trapFail / eliminated / champion
+  </pre></div>
+</section>
+
+<section>
+  <div class="eyebrow">The core rule</div>
+  <h2>How one player is graded</h2>
+  <p>Each frame's error is the weighted mean angle error over the joints the camera can see. Arms weigh 1 and legs 0.5. A joint counts only if all 3 of its landmarks have visibility of at least 0.5, and a frame counts only if at least 4 joints do.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  start(["player still alive?"]) -->|no| skip["not scored"]
+  start -->|yes| best["best error among frames<br/>in beat ±150 ms"]
+  best --> grade{"error"}
+  grade -->|"≤ 15°"| P["perfect"]
+  grade -->|"≤ 30°"| Gd["good"]
+  grade -->|"> 30° or no usable frame"| Ms["miss"]
+  P & Gd --> cue1{"cue"}
+  Ms --> cue2{"cue"}
+  cue1 -->|sing| hit["hit: +300 / +100 points<br/>combo +1 · flow +0.12 / +0.06"]
+  cue1 -->|trap| tf["trapFail → eliminated"]
+  cue2 -->|sing| miss["miss: lives −1 · combo 0<br/>flow −0.3"]
+  cue2 -->|trap| safe["safe: nothing changes"]
+  miss --> zero{"lives = 0?"}
+  zero -->|yes| el["eliminated"]
+  tf & el --> champ["champion: last one standing,<br/>else higher score,<br/>else the reigning champion"]
+  </pre></div>
+</section>
+
+<section>
+  <div class="eyebrow">Tempo and moves</div>
+  <h2>Tempo steps and the move deck</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph Tempo["tempoBpm, each measure"]
+    L["leader flow =<br/>highest flow among alive"] --> TG["target = highest tier<br/>with minFlow ≤ leader"]
+    TG --> STEP["move one tier<br/>toward target"]
+  end
+  subgraph Deck["nextMove"]
+    E{"deck empty?"} -->|yes| SH["shuffle all 10<br/>no repeat across reshuffle"]
+    E -->|no| D["deal top card"]
+    SH --> D
+    D --> TR{"move index ≥ 3?"}
+    TR -->|yes| R["trap with 15% chance"]
+    TR -->|no| SG["always sung"]
+  end
+  </pre></div>
+  <div class="scroll"><table>
+    <thead><tr><th>Tier</th><th>Leader flow from</th><th style="text-align:right">BPM</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td class="mono">0</td><td class="num">78</td></tr>
+      <tr><td>1</td><td class="mono">0.2</td><td class="num">86</td></tr>
+      <tr><td>2</td><td class="mono">0.4</td><td class="num">100</td></tr>
+      <tr><td>3</td><td class="mono">0.6</td><td class="num">107</td></tr>
+      <tr><td>4</td><td class="mono">0.8</td><td class="num">132</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="eyebrow">Settled in the grill-me session</div>
+  <h2>Decisions</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Question</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>How scoring finds the moves</td><td>The 10 ids are hardcoded in <code>src/scoring/index.ts</code>, because static hosting can't list a folder.</td></tr>
+      <tr><td>Who changes <code>src/main.ts</code></td><td>This branch does, and the PR points out the two lines to the game owner.</td></tr>
+      <tr><td>How it's checked</td><td>Rule asserts on made-up frames, plus a report over the recorded sessions.</td></tr>
+      <tr><td>Move order</td><td>Shuffled deck: every move once per pass, never the same move twice in a row.</td></tr>
+      <tr><td>Player off camera</td><td>Counts as a miss: costs a life on a sung move, safe on a trap.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="eyebrow">Checks</div>
+  <h2>What the test covers</h2>
+  <p>Run <code>node src/scoring/scoring.test.mjs</code>. It needs Node 24 and no new dependencies. All of these pass:</p>
+  <ul>
+    <li>Perfect, good and miss at the thresholds, and a wrong pose that doesn't count while its joint is hidden.</li>
+    <li>A frame with too few visible joints is ignored and grades as a miss.</li>
+    <li>The best frame in the window wins, and frames outside the window are ignored.</li>
+    <li>An absent player loses a life, and a second miss eliminates them and crowns the other player.</li>
+    <li>A copied trap eliminates; a trap ignored costs nothing.</li>
+    <li>Both players out on the same move with tied scores: the reigning champion keeps the crown.</li>
+    <li>Tempo climbs one tier per measure and steps down one at a time.</li>
+    <li>Five deck passes each deal all 10 moves with no back-to-back repeat, and the first 3 moves are never traps.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Recorded sessions</div>
+  <h2>Best match per move</h2>
+  <p>The best error each player reached for each move anywhere in the recording. It shows the moves can be hit, not whether the 15°/30° thresholds are strict enough. A live round answers that.</p>
+  <div class="sessions" id="sessions"></div>
+</section>
+
+<section>
+  <div class="eyebrow">Changes</div>
+  <h2>Files on the branch</h2>
+  <div class="files">
+    <div class="file"><span class="tag">new</span><code>src/scoring/index.ts</code><span>createScoring, loadMoves, frameError, grade</span></div>
+    <div class="file"><span class="tag">new</span><code>src/scoring/scoring.test.mjs</code><span>Rule asserts and session report</span></div>
+    <div class="file"><span class="tag">new</span><code>src/scoring/SCORING.md</code><span>Scoring spec for this branch</span></div>
+    <div class="file"><span class="tag">changed · game's file</span><code>src/main.ts</code><span>Import and call switched from the fake to real scoring</span></div>
+    <div class="file"><span class="tag">changed</span><code>SIMPLIFICATIONS.md</code><span>One line on the hardcoded move list</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Still open</div>
+  <h2>Next steps</h2>
+  <ul>
+    <li>Play a round at <code>localhost:5173/?demo</code> or live, and tune <code>perfectMaxErrorDeg</code> / <code>goodMaxErrorDeg</code> in <code>src/config.ts</code> if it feels easy.</li>
+    <li>Commit, push <code>scoring</code> and open the PR into <code>main</code>, pointing out the <code>src/main.ts</code> change.</li>
+    <li>Once merged, the game owner can delete <code>src/game/fake.ts</code>.</li>
+  </ul>
+</section>
+
+</main>
+
+<script>
+// Output of node src/scoring/scoring.test.mjs, 2026-11-07: [move, P0 error, P1 error]; null = player not in session.
+const SESSIONS = [
+  ["duo.json", "828 frames · 20.4 s · 2 players", [
+    ["chicken",15.6,2.1],["disco",22.6,24.7],["double_bi",1.8,7.6],["right_biceps",16.3,19.0],["right_knee",1.6,3.6],
+    ["six_seven",15.9,13.1],["sumo_squat",18.5,11.2],["supermen",11.4,11.5],["t_pose",5.0,29.9],["y_pose",21.9,43.2]]],
+  ["legs.json", "264 frames · 26.6 s · 2 players", [
+    ["chicken",14.1,16.9],["disco",7.3,7.8],["double_bi",11.3,23.4],["right_biceps",6.4,3.4],["right_knee",7.0,9.6],
+    ["six_seven",5.7,18.6],["sumo_squat",21.2,25.2],["supermen",7.8,13.4],["t_pose",14.2,2.5],["y_pose",27.7,20.0]]],
+  ["solo.json", "208 frames · 25.9 s · P1 only", [
+    ["chicken",null,19.2],["disco",null,16.2],["double_bi",null,3.9],["right_biceps",null,12.5],["right_knee",null,3.4],
+    ["six_seven",null,4.0],["sumo_squat",null,11.4],["supermen",null,4.8],["t_pose",null,2.7],["y_pose",null,4.5]]],
+];
+const gradeOf = (e) => (e <= 15 ? "perfect" : e <= 30 ? "good" : "miss");
+const cell = (e) => e === null ? '<td class="num" style="color:var(--muted)">—</td>'
+  : `<td class="num"><span class="g ${gradeOf(e)}">${gradeOf(e)}</span> ${e.toFixed(1)}°</td>`;
+document.getElementById("sessions").innerHTML = SESSIONS.map(([name, meta, rows]) => `
+  <div style="display:grid;gap:8px">
+    <h3><code>${name}</code> <span style="color:var(--muted);font-weight:400">${meta}</span></h3>
+    <div class="scroll"><table>
+      <thead><tr><th>Move</th><th style="text-align:right">P0 (left)</th><th style="text-align:right">P1 (right)</th></tr></thead>
+      <tbody>${rows.map(([m, a, b]) => `<tr><td class="mono">${m}</td>${cell(a)}${cell(b)}</tr>`).join("")}</tbody>
+    </table></div>
+  </div>`).join("");
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+const css = getComputedStyle(document.documentElement);
+const v = (n) => css.getPropertyValue(n).trim();
+mermaid.initialize({
+  startOnLoad: true, theme: "base",
+  themeVariables: {
+    fontFamily: "Archivo, system-ui, sans-serif", fontSize: "14px",
+    primaryColor: v("--bg"), primaryTextColor: v("--fg"), primaryBorderColor: v("--accent"),
+    lineColor: v("--muted"), secondaryColor: v("--surface"), tertiaryColor: v("--surface"),
+    clusterBkg: v("--surface"), clusterBorder: v("--line"), noteBkgColor: v("--perfect-bg"), noteTextColor: v("--fg"),
+    actorBkg: v("--bg"), actorBorder: v("--accent"), actorTextColor: v("--fg"), signalColor: v("--fg"), signalTextColor: v("--fg"),
+    edgeLabelBackground: v("--surface"),
+  },
+});
+</script>
+</body>
+</html>

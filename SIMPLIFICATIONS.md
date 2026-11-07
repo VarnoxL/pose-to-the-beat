@@ -12,3 +12,4 @@ Every shortcut we take, so Q&A answers stay honest. One line each: what, why, an
 - A lone player keeps their id while alone instead of re-picking it by screen half every frame (SPEC says by half), so standing in the middle doesn't flip them. Known edges: after a second player leaves, the one left is re-picked by half; a new person entering after the lone player left inherits that id until a second player appears. (Vision, hour 1)
 - MediaPipe runs on the CPU delegate, not GPU: on the dev laptop GPU (WebGL) took 110 ms/frame vs 40 ms on CPU. Webcam asks for 640x360 instead of 720p for the same reason. No auto-pick between them. (Vision, hour 1)
 - In bot mode the one human is always slot 0 (left); if two people are on camera, the left one plays. (Game, hour 1)
+- Scoring's move list is hardcoded in `src/scoring/index.ts` (static hosting can't list a folder); add the id there when adding a move file. (Scoring, hour 18)
