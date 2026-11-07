@@ -15,6 +15,8 @@ const now = () => audio.currentTime - lagMs / 1000;
 const latest: (PlayerFrame | undefined)[] = [];
 const recorder = createRecorder();
 let recording = false, video: HTMLVideoElement | undefined, stop = () => {}, frames = 0, fps = 0, fpsT = 0;
+let stats = { detectMs: 0 }, camFrames = 0, camFps = 0;
+const countCam = () => { camFrames++; video?.requestVideoFrameCallback(countCam); };
 
 const onFrame = (f: PlayerFrame) => {
   latest[f.id] = f;
@@ -27,7 +29,9 @@ document.querySelector("#cam")!.addEventListener("click", async () => {
   stop();
   const v = await startVision(onFrame, now);
   video = v.video;
+  stats = v.stats;
   stop = v.stop;
+  video.requestVideoFrameCallback(countCam);
 });
 
 document.querySelector<HTMLInputElement>("#file")!.addEventListener("change", async (e) => {
@@ -81,9 +85,11 @@ function draw() {
   }
   ctx.restore();
 
-  if (t - fpsT >= 1) (fps = frames / (t - fpsT)), (frames = 0), (fpsT = t);
+  if (t - fpsT >= 1) (fps = frames / (t - fpsT)), (camFps = camFrames / (t - fpsT)), (frames = camFrames = 0), (fpsT = t);
+  const track = (video?.srcObject as MediaStream | undefined)?.getVideoTracks()[0]?.getSettings();
   info.textContent =
     `${recording ? `● REC ${recorder.count}` : ""}\nplayer-frames/s ${fps.toFixed(0)}  lag ${lagMs}ms\n` +
+    (track ? `camera ${camFps.toFixed(0)}fps (reports ${track.frameRate?.toFixed(0)}, ${track.width}x${track.height})  detect ${stats.detectMs.toFixed(0)}ms\n` : "") +
     latest.map((f) => f && `P${f.id} conf ${f.confidence.toFixed(2)}\n` +
       Object.entries(f.angles).map(([j, a]) => `  ${j.padEnd(14)}${a.toFixed(0)}`).join("\n")).join("\n");
 }
@@ -105,6 +111,8 @@ draw();
   const ids = assignPlayers([pose(0.2), pose(0.8)]);
   console.assert(ids[0][1][23].x === 0.8 && ids[1][1][23].x === 0.2, "sort by mirrored screen x");
   console.assert(assignPlayers([pose(0.2)])[0][0] === 1, "single pose on screen right = player 1");
+  console.assert(assignPlayers([pose(0.6)], 1)[0][0] === 1, "lone player keeps id after crossing the middle");
+  console.assert(assignPlayers([pose(0.2), pose(0.8)], 1)[0][0] === 0, "two players ignore loneId");
   const oe = new OneEuro();
   oe.filter(0, 0);
   const v = oe.filter(1, 1 / 30);

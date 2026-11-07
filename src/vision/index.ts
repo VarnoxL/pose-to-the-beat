@@ -33,10 +33,13 @@ export function toFrame(id: 0 | 1, t: number, landmarks: Point[], aspect: number
   return { id, t, angles, landmarks, confidence };
 }
 
-/** Screen-half player ids (SPEC "Player assignment"). Returns [id, pose] pairs. */
-export function assignPlayers(poses: Point[][]): [0 | 1, Point[]][] {
+/**
+ * Screen-half player ids (SPEC "Player assignment"). Returns [id, pose] pairs.
+ * `loneId` = id of a lone player from earlier frames: they keep it instead of flipping when they cross the middle.
+ */
+export function assignPlayers(poses: Point[][], loneId?: 0 | 1): [0 | 1, Point[]][] {
   const screenX = (p: Point[]) => 1 - (p[23].x + p[24].x) / 2; // view is mirrored
-  if (poses.length === 1) return [[screenX(poses[0]) < 0.5 ? 0 : 1, poses[0]]];
+  if (poses.length === 1) return [[loneId ?? (screenX(poses[0]) < 0.5 ? 0 : 1), poses[0]]];
   const [a, b] = [...poses].sort((p, q) => screenX(p) - screenX(q));
   return b ? [[0, a], [1, b]] : [];
 }
@@ -46,21 +49,22 @@ export async function startVision(onFrame: OnFrame, now: () => number) {
   const video = document.createElement("video");
   video.muted = video.playsInline = true;
   video.srcObject = await navigator.mediaDevices.getUserMedia({
-    video: { width: 1280, height: 720, facingMode: "user" },
+    video: { width: 640, height: 360, facingMode: "user" }, // model works at 256px internally; a smaller frame is cheaper to hand it
     audio: false,
   });
   await video.play();
 
   const fileset = await FilesetResolver.forVisionTasks("mediapipe/wasm");
   const landmarker = await PoseLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: "mediapipe/pose_landmarker_lite.task", delegate: "GPU" },
+    baseOptions: { modelAssetPath: "mediapipe/pose_landmarker_lite.task", delegate: "CPU" }, // ponytail: GPU (WebGL) was 110ms vs CPU 40ms on the dev laptop; try GPU again if a target machine is CPU-starved
     runningMode: "VIDEO",
     numPoses: 2,
   });
 
   // One filter per player, landmark and axis. Visibility is passed through raw.
   const filters = [0, 1].map(() => Array.from({ length: 33 }, () => [new OneEuro(), new OneEuro(), new OneEuro()]));
-  let lastVideoTime = -1, lastTs = 0, running = true, raf = 0;
+  let lastVideoTime = -1, lastTs = 0, running = true, raf = 0, loneId: 0 | 1 | undefined;
+  const stats = { detectMs: 0 }; // dev readout only; wall-clock is fine here, nothing is timed off it
 
   const loop = () => {
     if (!running) return;
@@ -69,9 +73,14 @@ export async function startVision(onFrame: OnFrame, now: () => number) {
     lastVideoTime = video.currentTime;
     const t = now();
     lastTs = Math.max(lastTs + 1, Math.round(t * 1000)); // MediaPipe needs strictly increasing ms
+    const d0 = performance.now();
     const result = landmarker.detectForVideo(video, lastTs);
+    stats.detectMs = performance.now() - d0;
     const aspect = video.videoWidth / video.videoHeight;
-    for (const [id, raw] of assignPlayers(result.landmarks as Point[][])) {
+    const players = assignPlayers(result.landmarks as Point[][], loneId);
+    // Sticky through frames with no pose (tracking blips); two players reset it to screen halves.
+    if (players.length) loneId = players.length === 1 ? players[0][0] : undefined;
+    for (const [id, raw] of players) {
       const smooth = raw.map((p, i) => {
         const [fx, fy, fz] = filters[id][i];
         return { x: fx.filter(p.x, t), y: fy.filter(p.y, t), z: fz.filter(p.z, t), visibility: p.visibility };
@@ -83,6 +92,7 @@ export async function startVision(onFrame: OnFrame, now: () => number) {
 
   return {
     video,
+    stats,
     stop() {
       running = false;
       cancelAnimationFrame(raf);
