@@ -2,6 +2,7 @@
 //   (default)       live webcam, 1v1; press B on the title for you vs bot
 //   ?demo           two bots, no camera (dev / backup video)
 //   ?replay=<name>  feed public/assets/sessions/<name>.json instead of the camera
+import { config } from "./config";
 import type { PlayerFrame } from "./types";
 import { startBots } from "./game/bot";
 import { createFakeScoring, loadMoves } from "./game/fake";
@@ -25,7 +26,7 @@ const lastSeen = [-Infinity, -Infinity];
 function onHumanFrame(f: PlayerFrame) {
   lastSeen[f.id] = f.t;
   if (game.mode !== "bot") return game.onFrame(f);
-  if (f.id === 1 && f.t - lastSeen[0] < 0.5) return; // two people in bot mode: the left one plays
+  if (f.id === 1 && f.t - lastSeen[0] < config.playerGoneSec) return; // two people in bot mode: the left one plays
   game.onFrame({ ...f, id: 0 });
 }
 

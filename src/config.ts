@@ -49,6 +49,7 @@ export const config = {
   eliminatedScreenSec: 2,
   championScreenSec: 3,
   popupSec: 0.8, // how long PERFECT / GOOD / MISS stays up
+  playerGoneSec: 0.5, // no frame for this long = player left (skeleton hidden; bot mode lets a lone right-side player in)
   characterPoseLerp: 12, // per second; how fast the character eases into the next pose
   musicGain: 0.8,
   lagCalibrationBpm: 100,

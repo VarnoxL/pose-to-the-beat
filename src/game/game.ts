@@ -266,7 +266,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       }
       for (const id of IDS) {
         const f = latest[id];
-        if (!f || n - f.t > 0.5) continue;
+        if (!f || n - f.t > config.playerGoneSec) continue;
         drawSkeleton(ctx, f.landmarks, cam, inRound && out[id] ? "#555" : COLORS[id], Math.max(4, H / 120));
       }
     });
