@@ -1,0 +1,14 @@
+{
+  "id": "t_pose",
+  "name": "t pose",
+  "target": {
+    "leftElbow": 156,
+    "rightElbow": 159,
+    "leftShoulder": 89,
+    "rightShoulder": 90,
+    "leftHip": 173,
+    "rightHip": 168,
+    "leftKnee": 179,
+    "rightKnee": 175
+  }
+}

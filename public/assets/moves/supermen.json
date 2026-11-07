@@ -1,0 +1,14 @@
+{
+  "id": "supermen",
+  "name": "supermen",
+  "target": {
+    "leftElbow": 131,
+    "rightElbow": 119,
+    "leftShoulder": 38,
+    "rightShoulder": 46,
+    "leftHip": 166,
+    "rightHip": 161,
+    "leftKnee": 171,
+    "rightKnee": 171
+  }
+}
