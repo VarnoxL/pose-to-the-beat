@@ -1,0 +1,14 @@
+{
+  "id": "six_seven",
+  "name": "6 7",
+  "target": {
+    "leftElbow": 40,
+    "rightElbow": 18,
+    "leftShoulder": 27,
+    "rightShoulder": 26,
+    "leftHip": 168,
+    "rightHip": 169,
+    "leftKnee": 180,
+    "rightKnee": 180
+  }
+}

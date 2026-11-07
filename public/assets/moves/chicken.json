@@ -1,0 +1,14 @@
+{
+  "id": "chicken",
+  "name": "chicken",
+  "target": {
+    "leftElbow": 32,
+    "rightElbow": 38,
+    "leftShoulder": 84,
+    "rightShoulder": 75,
+    "leftHip": 174,
+    "rightHip": 172,
+    "leftKnee": 176,
+    "rightKnee": 178
+  }
+}

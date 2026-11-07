@@ -1,0 +1,14 @@
+{
+  "id": "y_pose",
+  "name": "y pose",
+  "target": {
+    "leftElbow": 158,
+    "rightElbow": 148,
+    "leftShoulder": 141,
+    "rightShoulder": 133,
+    "leftHip": 173,
+    "rightHip": 171,
+    "leftKnee": 179,
+    "rightKnee": 172
+  }
+}

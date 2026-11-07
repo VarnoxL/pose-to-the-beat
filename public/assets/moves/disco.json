@@ -1,0 +1,14 @@
+{
+  "id": "disco",
+  "name": "disco",
+  "target": {
+    "leftElbow": 180,
+    "rightElbow": 158,
+    "leftShoulder": 45,
+    "rightShoulder": 129,
+    "leftHip": 168,
+    "rightHip": 172,
+    "leftKnee": 178,
+    "rightKnee": 174
+  }
+}

@@ -50,13 +50,24 @@ addEventListener("keydown", (e) => {
     if (recording) recorder.download(`session_${Date.now()}`), recorder.clear();
     recording = !recording;
   }
-  if (e.key === "m" && latest[0]) {
-    const id = prompt("Move id (e.g. arms_up)");
-    if (!id) return;
-    const move: MoveDef = { id, name: id.replace(/_/g, " "), target: latest[0].angles };
-    downloadJson(move, `${id}.json`);
+  if (e.key === "m" && !e.repeat) {
+    const id = prompt(`Move id (e.g. arms_up). Saved ${CAPTURE_DELAY_S}s after OK: get into the pose.`)?.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    if (id) capture = { id, at: now() + CAPTURE_DELAY_S };
   }
 });
+
+// Move capture: countdown so one person can press M and walk back; saves the clearest fresh player, not the presser.
+const CAPTURE_DELAY_S = 5;
+let capture: { id: string; at: number } | undefined, captureMsg = "";
+function saveCapture(t: number) {
+  const { id } = capture!;
+  capture = undefined;
+  const f = latest.filter((p) => p && t - p.t < 0.5).sort((a, b) => b!.confidence - a!.confidence)[0];
+  if (!f) return void (captureMsg = `${id}: nobody in view, not saved`);
+  const move: MoveDef = { id, name: id.replace(/_/g, " "), target: f.angles };
+  downloadJson(move, `${id}.json`);
+  captureMsg = `${id}: saved P${f.id} conf ${f.confidence.toFixed(2)}${f.confidence < config.minJointVisibility ? " (LOW, redo)" : ""}`;
+}
 
 const COLORS = ["#4cf", "#f6a"];
 function draw() {
@@ -70,6 +81,7 @@ function draw() {
   if (video) ctx.drawImage(video, 0, 0, w, h);
   else (ctx.fillStyle = "#111"), ctx.fillRect(0, 0, w, h);
   const t = now();
+  if (capture && t >= capture.at) saveCapture(t);
   for (const f of latest) {
     if (!f || t - f.t > 0.5) continue; // stale: player left the frame
     ctx.strokeStyle = ctx.fillStyle = COLORS[f.id];
@@ -84,11 +96,17 @@ function draw() {
     }
   }
   ctx.restore();
+  if (capture) {
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${h / 3}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText(String(Math.ceil(capture.at - t)), w / 2, h / 2);
+  }
 
   if (t - fpsT >= 1) (fps = frames / (t - fpsT)), (camFps = camFrames / (t - fpsT)), (frames = camFrames = 0), (fpsT = t);
   const track = (video?.srcObject as MediaStream | undefined)?.getVideoTracks()[0]?.getSettings();
   info.textContent =
-    `${recording ? `● REC ${recorder.count}` : ""}\nplayer-frames/s ${fps.toFixed(0)}  lag ${lagMs}ms\n` +
+    `${recording ? `● REC ${recorder.count}` : ""} ${captureMsg}\nplayer-frames/s ${fps.toFixed(0)}  lag ${lagMs}ms\n` +
     (track ? `camera ${camFps.toFixed(0)}fps (reports ${track.frameRate?.toFixed(0)}, ${track.width}x${track.height})  detect ${stats.detectMs.toFixed(0)}ms\n` : "") +
     latest.map((f) => f && `P${f.id} conf ${f.confidence.toFixed(2)}\n` +
       Object.entries(f.angles).map(([j, a]) => `  ${j.padEnd(14)}${a.toFixed(0)}`).join("\n")).join("\n");

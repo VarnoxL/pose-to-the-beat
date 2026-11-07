@@ -1,0 +1,14 @@
+{
+  "id": "right_knee",
+  "name": "right knee",
+  "target": {
+    "leftElbow": 166,
+    "rightElbow": 174,
+    "leftShoulder": 25,
+    "rightShoulder": 23,
+    "leftHip": 176,
+    "rightHip": 63,
+    "leftKnee": 165,
+    "rightKnee": 62
+  }
+}

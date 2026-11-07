@@ -1,0 +1,14 @@
+{
+  "id": "right_biceps",
+  "name": "right biceps",
+  "target": {
+    "leftElbow": 166,
+    "rightElbow": 76,
+    "leftShoulder": 24,
+    "rightShoulder": 96,
+    "leftHip": 171,
+    "rightHip": 171,
+    "leftKnee": 180,
+    "rightKnee": 172
+  }
+}
