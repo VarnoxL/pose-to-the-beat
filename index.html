@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pose to the Beat</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      #privacy { position: fixed; bottom: 8px; right: 12px; font-size: 12px; opacity: 0.6; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="privacy">Camera stays on this device</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
