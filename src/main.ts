@@ -5,7 +5,7 @@
 import { config } from "./config";
 import type { PlayerFrame } from "./types";
 import { startBots } from "./game/bot";
-import { createFakeScoring, loadMoves } from "./game/fake";
+import { createScoring, loadMoves } from "./scoring";
 import { createGame } from "./game/game";
 import { startReplay, startVision, type Session } from "./vision";
 
@@ -14,8 +14,7 @@ const params = new URLSearchParams(location.search);
 const demo = params.has("demo");
 const replay = params.get("replay");
 
-// TODO when scoring merges: replace createFakeScoring(...) with the real createScoring().
-const scoring = createFakeScoring(await loadMoves());
+const scoring = createScoring(await loadMoves());
 const game = createGame(canvas, scoring, {
   onNewChallenger: (side, mode) => { if (demo || (mode === "bot" && side === 1)) bots.replace(side); },
 });
