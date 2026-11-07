@@ -12,7 +12,7 @@ What's done on the `scoring` branch, what's left, and how to check it. The rules
   - `nextMove` deals from a shuffled deck, never repeats the last move (even across a reshuffle), and never deals a trap before `noTrapsBeforeMove`.
   - `reset(championId)` starts each round clean.
   - `loadMoves()` loads the 10 hardcoded move files.
-- **`src/main.ts`** now uses the real scoring instead of `createFakeScoring` (two lines). This is the game track's file, so the game owner has to OK it.
+- **`src/main.ts`** now uses the real scoring instead of `createFakeScoring` (import and call swapped, old TODO removed). This is the game track's file, so the game owner has to OK it.
 - **`src/scoring/scoring.test.mjs`**: rule asserts plus a report over `public/assets/sessions/`. All asserts pass.
 - `npm run build` passes.
 - I ran a headless `?demo` in Chrome: no console errors, and a full round played to the "takes the crown" screen and NEW CHALLENGER.
