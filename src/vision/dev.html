@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Dev-only vision harness. Not part of the build. base makes relative asset URLs resolve like index.html. -->
+    <base href="/" />
+    <title>Vision Harness</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 14px system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      #ui { position: fixed; top: 8px; left: 8px; background: #000a; padding: 8px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="ui">
+      <button id="cam">Start camera</button>
+      <label>Replay <input id="file" type="file" accept=".json" /></label>
+      <div>R: record / save session · M: save left player's pose as move</div>
+      <pre id="info"></pre>
+    </div>
+    <script type="module" src="/src/vision/dev.ts"></script>
+  </body>
+</html>
