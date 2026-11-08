@@ -5,9 +5,11 @@ import { JOINTS, type GameEvent, type Joint, type Move, type PlayerFrame } from 
 import { BeatTrack, Music, loadLagSec, saveLagMs } from "./audio";
 import { REST_POSE, drawSkeleton, mirrored, poseToLandmarks, type Rect } from "./pose";
 import type { Scoring } from "./scoringApi";
+import { frameError } from "../scoring";
 
 type Screen = "title" | "round" | "eliminated" | "champion" | "challenger" | "lag";
-type Pending = { move: Move; previewTime: number; scored: boolean };
+/** `best` is for the D debug readout: each player's lowest error within ±1 s of the beat, and when it happened. */
+type Pending = { move: Move; previewTime: number; scored: boolean; best: ({ err: number; dt: number } | null)[] };
 type Popup = { player: 0 | 1 | null; text: string; color: string; time: number };
 export type Upcoming = { move: Move; beatTime: number } | null;
 
@@ -17,7 +19,8 @@ const GOLD = "#ffd23f";
 const RED = "#ff5555";
 const IDS = [0, 1] as const;
 
-export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1, mode: Mode) => void } = {}) {
+export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1, mode: Mode) => void; spaceMode?: Mode } = {}) {
+  const spaceMode = opts.spaceMode ?? "duo"; // what SPACE starts on the title (?bot makes it "bot")
   const ctx = canvas.getContext("2d")!;
   const audio = new AudioContext();
   const music = new Music(audio);
@@ -38,6 +41,9 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   let crownKept = false;
   let video: HTMLVideoElement | null = null;
   const latest: (PlayerFrame | null)[] = [null, null];
+  let debug = false; // key D
+  const fps = [0, 0], fpsCount = [0, 0];
+  let fpsAt = 0;
 
   // Round state
   let track: BeatTrack | null = null;
@@ -82,7 +88,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     const mb = b + config.previewBeats;
     if (isMoveBeat(mb) && t < roundEnd) {
       const move = scoring.nextMove(mb);
-      pending.push({ move, previewTime: t, scored: false });
+      pending.push({ move, previewTime: t, scored: false, best: [null, null] });
       if (move.cue === "sing") void music.voice(move.id, t);
     }
   }
@@ -207,13 +213,18 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     if (e.repeat) return;
     if (e.code === "Space") {
       e.preventDefault();
-      if (screen === "title") mode = "duo";
+      if (screen === "title") {
+        mode = spaceMode;
+        champion = null;
+      }
       if (screen === "title" || screen === "challenger") void startRound();
       else if (screen === "lag") lagDone ? void startLag() : lagSample(audio.currentTime, lagTap);
     } else if (e.code === "KeyB" && screen === "title") {
       mode = "bot";
       champion = null;
       void startRound();
+    } else if (e.code === "KeyD") {
+      debug = !debug;
     } else if (e.code === "KeyL" && (screen === "title" || screen === "challenger")) {
       void startLag();
     } else if (e.code === "Escape") {
@@ -226,6 +237,16 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   function onFrame(f: PlayerFrame) {
     latest[f.id] = f;
     scoring.addFrame(f);
+    fpsCount[f.id]++;
+    if (debug && track) {
+      for (const p of pending) {
+        const bt = track.times[p.move.beat];
+        if (bt === undefined || Math.abs(f.t - bt) > 1) continue;
+        const err = frameError(f, p.move.target);
+        const b = p.best[f.id];
+        if (err !== null && (!b || err < b.err)) p.best[f.id] = { err, dt: f.t - bt };
+      }
+    }
     if (screen === "lag") {
       const lm = f.landmarks;
       const up = lm[15].y < lm[0].y || lm[16].y < lm[0].y; // a wrist above the nose
@@ -431,8 +452,9 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
         ["Copy the move when the character SINGS it.", 0.8],
         ["No song? Don't move. That's a trap.", 0.8, RED],
         ["", 0.5],
-        ["SPACE  ·  1v1, two players side by side", 1.1, "#fff"],
-        ["B  ·  you vs the bot (stand on the left)", 0.9, "#ccc"],
+        spaceMode === "bot" ? ["SPACE or B  ·  you vs the bot", 1.1, "#fff"] : ["SPACE  ·  1v1, two players side by side", 1.1, "#fff"],
+        spaceMode === "bot" ? ["", 0.9] : ["B  ·  you vs the bot (stand on the left)", 0.9, "#ccc"],
+        ["D  ·  debug readout   ·   L  ·  lag calibration", 0.6, "#888"],
         [status, 0.6, RED],
       ], W, H);
     } else if (screen === "eliminated") {
@@ -472,12 +494,48 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     }
   }
 
+  /** Per-player "step back" hint, and the D debug readout. Drawn on top of everything. */
+  function drawHints(W: number, H: number) {
+    const n = now();
+    // Wall clock on purpose: the audio clock is frozen until the first key press, which made this read 0 on the title.
+    // Debug display only; nothing is timed off it.
+    const wall = performance.now() / 1000;
+    if (wall - fpsAt >= 1) {
+      for (const id of IDS) (fps[id] = fpsCount[id] / Math.max(1e-3, wall - fpsAt)), (fpsCount[id] = 0);
+      fpsAt = wall;
+    }
+    if (screen !== "title" && screen !== "round") return;
+    const shown = shownMove();
+    const size = Math.round(H / 40);
+    for (const id of IDS) {
+      if (mode === "bot" && id === 1) continue; // the bot is always in view
+      const f = latest[id];
+      const x = id === 0 ? W * 0.25 : W * 0.75;
+      const fresh = f && n - f.t <= config.playerGoneSec;
+      // frameError is null when too few joints are usable: the scorer can't see enough of this player.
+      if (fresh && frameError(f, REST_POSE) === null) text("STEP BACK: show both arms and your hips", x, H * 0.9, size, GOLD);
+      if (!debug) continue;
+      const lines = [`P${id + 1}  ${fps[id].toFixed(0)} frames/s  ${fresh ? "" : "NOT SEEN"}`];
+      if (fresh && shown) {
+        const e = frameError(f, shown.p.move.target);
+        lines.push(`now vs ${shown.p.move.id}: ${e === null ? "too few joints" : `${e.toFixed(0)}°`}`);
+      }
+      // Last move whose beat has passed: best error within ±1 s and its offset from the beat.
+      const last = [...pending].reverse().find((p) => (track?.times[p.move.beat] ?? Infinity) < n);
+      const b = last?.best[id];
+      if (last) lines.push(b ? `last ${last.move.id}: best ${b.err.toFixed(0)}° at ${b.dt >= 0 ? "+" : ""}${Math.round(b.dt * 1000)} ms (window ±${config.scoreWindowMs})` : `last ${last.move.id}: no usable frame`);
+      lines.forEach((s, i) => text(s, x, H * 0.62 + i * size * 1.3, size * 0.8, "#9ef"));
+    }
+    if (debug) text(`lag offset ${Math.round(lagSec * 1000)} ms · good ≤ ${config.goodMaxErrorDeg}° · perfect ≤ ${config.perfectMaxErrorDeg}° · D to hide`, W / 2, H * 0.97, size * 0.7, "#9ef");
+  }
+
   function loop() {
     requestAnimationFrame(loop);
     if (screen === "round") updateRound();
     else if (screen === "eliminated" || screen === "champion") updateScreens();
     else if (screen === "lag") updateLag();
     draw();
+    drawHints(canvas.width, canvas.height);
   }
   loop();
 

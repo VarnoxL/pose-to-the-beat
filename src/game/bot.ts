@@ -5,11 +5,13 @@ import { JOINTS, type Joint, type Move, type PlayerFrame } from "../types";
 import type { Upcoming } from "./game";
 import { REST_POSE, poseToLandmarks } from "./pose";
 
-type Bot = { skill: number; pose: Record<Joint, number>; plan: Map<number, Record<Joint, number>> };
+// Plans are keyed by the Move object, not its beat: beat numbers restart every round, so a beat key made a bot
+// that survived a round replay last round's poses against the new moves.
+type Bot = { skill: number; pose: Record<Joint, number>; plan: WeakMap<Move, Record<Joint, number>> };
 const newBot = (): Bot => ({
   skill: config.bot.skillMin + Math.random() * (config.bot.skillMax - config.bot.skillMin),
   pose: { ...REST_POSE },
-  plan: new Map(),
+  plan: new WeakMap(),
 });
 
 /** `ids()` says which player slots the bots fill right now (e.g. [1] in bot mode, [] in 1v1). */
@@ -36,8 +38,8 @@ export function startBots(onFrame: (f: PlayerFrame) => void, now: () => number, 
       const bot = bots[id];
       let goal = bot.pose;
       if (up && up.beatTime - t < config.bot.reactSec) {
-        if (!bot.plan.has(up.move.beat)) bot.plan.set(up.move.beat, decide(bot, up.move));
-        goal = bot.plan.get(up.move.beat)!;
+        if (!bot.plan.has(up.move)) bot.plan.set(up.move, decide(bot, up.move));
+        goal = bot.plan.get(up.move)!;
       }
       const k = 1 - Math.exp(-Math.min(dt, 0.1) * config.bot.speed);
       for (const j of JOINTS) bot.pose[j] += (goal[j] - bot.pose[j]) * k;
