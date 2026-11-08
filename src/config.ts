@@ -12,9 +12,9 @@ export const config = {
   noTrapsBeforeMove: 3, // moves with index < 3 (0-based, per round) are never traps
 
   // Scoring (mean absolute angle error in degrees, over visible joints)
-  scoreWindowMs: 150, // best match within ±window around the beat counts
+  scoreWindowMs: 200, // best match within ±window around the beat counts (150 was tighter than real camera + detection delay)
   perfectMaxErrorDeg: 15,
-  goodMaxErrorDeg: 30, // also the trap threshold: error <= this on a trap = eliminated
+  goodMaxErrorDeg: 22, // also the trap threshold: error <= this on a trap = eliminated. 30 let standing still match 5 of 10 moves (playtest 1)
   jointWeights: {
     leftElbow: 1, rightElbow: 1,
     leftShoulder: 1, rightShoulder: 1,
@@ -23,6 +23,19 @@ export const config = {
   },
   minJointVisibility: 0.5, // joints below this are skipped
   minVisibleJoints: 4, // fewer visible joints than this = miss
+  // "Doing nothing": arms down, standing. Measured from playtest 1 (median of 1,915 still frames).
+  standingPose: {
+    leftElbow: 175, rightElbow: 175,
+    leftShoulder: 18, rightShoulder: 18,
+    leftHip: 170, rightHip: 170,
+    leftKnee: 174, rightKnee: 174,
+  },
+  // A move's key joints are the ones whose target differs from standingPose by at least this much.
+  // A frame only counts against a move if all its key joints are visible, and a move is only dealt if they are.
+  keyJointMinDiffDeg: 40,
+  // A move is only dealt as a trap if its target is at least this far (mean angle) from standingPose and from
+  // the move before it, so holding still or holding the last pose can't trip it.
+  trapMinDistanceDeg: 32, // goodMaxErrorDeg + ~10° for tracking noise
   points: { perfect: 300, good: 100 },
 
   // Flow meter (per player, 0..1)
@@ -40,7 +53,8 @@ export const config = {
   ],
 
   // Vision
-  oneEuro: { minCutoff: 1.0, beta: 0.007, dCutoff: 1.0 },
+  // beta is per unit of speed in normalized image coords (0..1/s). 0.007 left a ~1 Hz low-pass that lagged a pose by 230-430 ms.
+  oneEuro: { minCutoff: 1.0, beta: 4, dCutoff: 1.0 },
 
   // Game: screens and timing
   leadInBeats: 3, // first move is scored on beat index 3 = the 4th beat of the first measure

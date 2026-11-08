@@ -80,10 +80,16 @@ export async function startVision(onFrame: OnFrame, now: () => number) {
     const players = assignPlayers(result.landmarks as Point[][], loneId);
     // Sticky through frames with no pose (tracking blips); two players reset it to screen halves.
     if (players.length) loneId = players.length === 1 ? players[0][0] : undefined;
+    // Filter on the camera's own frame clock: it advances even while the AudioContext is still suspended
+    // (before the first key or click), when now() is frozen and the filter would freeze with it.
+    const ft = video.currentTime;
     for (const [id, raw] of players) {
       const smooth = raw.map((p, i) => {
         const [fx, fy, fz] = filters[id][i];
-        return { x: fx.filter(p.x, t), y: fy.filter(p.y, t), z: fz.filter(p.z, t), visibility: p.visibility };
+        // MediaPipe guesses out-of-frame landmarks (legs folded up when you're close) and often still reports
+        // them as visible. A landmark outside the image can't be trusted, so it gets visibility 0.
+        const inFrame = p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1;
+        return { x: fx.filter(p.x, ft), y: fy.filter(p.y, ft), z: fz.filter(p.z, ft), visibility: inFrame ? p.visibility : 0 };
       });
       onFrame(toFrame(id, t, smooth, aspect));
     }

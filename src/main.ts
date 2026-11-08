@@ -1,11 +1,13 @@
 // Entry point. Game track owns this file; it wires vision -> scoring -> game.
 //   (default)       live webcam, 1v1; press B on the title for you vs bot
+//   ?bot            SPACE on the title starts you vs bot (same as pressing B)
+//   ?log            download round_<time>.json after every round (moves, grades, best error and timing, raw frames)
 //   ?demo           two bots, no camera (dev / backup video)
 //   ?replay=<name>  feed public/assets/sessions/<name>.json instead of the camera
 import { config } from "./config";
 import type { PlayerFrame } from "./types";
 import { startBots } from "./game/bot";
-import { createFakeScoring, loadMoves } from "./game/fake";
+import { createScoring, loadMoves } from "./scoring";
 import { createGame } from "./game/game";
 import { startReplay, startVision, type Session } from "./vision";
 
@@ -14,10 +16,11 @@ const params = new URLSearchParams(location.search);
 const demo = params.has("demo");
 const replay = params.get("replay");
 
-// TODO when scoring merges: replace createFakeScoring(...) with the real createScoring().
 const moves = await loadMoves();
-const scoring = createFakeScoring(moves);
+const scoring = createScoring(moves);
 const game = createGame(canvas, scoring, {
+  spaceMode: params.has("bot") ? "bot" : "duo",
+  log: params.has("log"),
   onNewChallenger: (side, mode) => { if (demo || (mode === "bot" && side === 1)) bots.replace(side); },
 });
 game.preloadVoices(moves.map((m) => m.id));

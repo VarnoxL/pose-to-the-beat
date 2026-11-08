@@ -6,10 +6,20 @@ import { BeatTrack, Music, loadLagSec, saveLagMs } from "./audio";
 import { REST_POSE, drawSkeleton, mirrored, poseToLandmarks, type Rect } from "./pose";
 import type { Scoring } from "./scoringApi";
 import { createPopFx } from "./pop";
+import { frameError } from "../scoring";
+import { downloadJson } from "../vision";
 
 type Screen = "title" | "round" | "eliminated" | "champion" | "challenger" | "lag";
-type Pending = { move: Move; previewTime: number; scored: boolean };
+/** `best` is for the D debug readout: each player's lowest error within ±1 s of the beat, and when it happened. */
+type Pending = { move: Move; previewTime: number; scored: boolean; best: ({ err: number; dt: number } | null)[] };
 type Popup = { player: 0 | 1 | null; text: string; color: string; time: number };
+/** ?log: one file per round with every move, how it was graded, and the raw frames, so it can be re-scored offline. */
+type RoundLog = {
+  recordedAt: string; mode: Mode; lagMs: number; roundStart: number;
+  config: { scoreWindowMs: number; perfectMaxErrorDeg: number; goodMaxErrorDeg: number; oneEuro: typeof config.oneEuro };
+  moves: { p: Pending; beatTime: number; bpm: number; events: GameEvent[] }[];
+  frames: PlayerFrame[];
+};
 export type Upcoming = { move: Move; beatTime: number } | null;
 
 const COLORS = ["#2de2e6", "#ff3cac"] as const;
@@ -18,7 +28,8 @@ const GOLD = "#ffd23f";
 const RED = "#ff5555";
 const IDS = [0, 1] as const;
 
-export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1, mode: Mode) => void } = {}) {
+export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1, mode: Mode) => void; spaceMode?: Mode; log?: boolean } = {}) {
+  const spaceMode = opts.spaceMode ?? "duo"; // what SPACE starts on the title (?bot makes it "bot")
   const ctx = canvas.getContext("2d")!;
   const audio = new AudioContext();
   const music = new Music(audio);
@@ -33,7 +44,8 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   addEventListener("pointerdown", resume);
 
   let screen: Screen = "title";
-  let mode: Mode = "duo";
+  let mode: Mode = spaceMode;
+  let blocked: Mode | null = null; // a start was refused by the framing check; F forces it
   let status = ""; // shown on the title screen (camera errors etc.)
   const NAMES = () => (mode === "bot" ? ["YOU", "BOT"] : ["P1", "P2"]);
   const verb = (id: number, they: string, you: string) => (mode === "bot" && id === 0 ? you : they);
@@ -42,6 +54,10 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   let crownKept = false;
   let video: HTMLVideoElement | null = null;
   const latest: (PlayerFrame | null)[] = [null, null];
+  let debug = false; // key D
+  const fps = [0, 0], fpsCount = [0, 0];
+  let fpsAt = 0;
+  let roundLog: RoundLog | null = null;
 
   // Round state
   let track: BeatTrack | null = null;
@@ -78,6 +94,13 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     const t0 = audio.currentTime + config.startDelaySec;
     roundEnd = t0 + config.roundSeconds;
     track = new BeatTrack(t0, () => scoring.tempoBpm(), onBeat);
+    if (opts.log) {
+      const { scoreWindowMs, perfectMaxErrorDeg, goodMaxErrorDeg, oneEuro } = config;
+      roundLog = {
+        recordedAt: new Date().toISOString(), mode, lagMs: Math.round(lagSec * 1000), roundStart: t0 - lagSec,
+        config: { scoreWindowMs, perfectMaxErrorDeg, goodMaxErrorDeg, oneEuro }, moves: [], frames: [],
+      };
+    }
     screen = "round";
   }
 
@@ -87,7 +110,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     const mb = b + config.previewBeats;
     if (isMoveBeat(mb) && t < roundEnd) {
       const move = scoring.nextMove(mb);
-      pending.push({ move, previewTime: t, scored: false });
+      pending.push({ move, previewTime: t, scored: false, best: [null, null] });
       if (move.cue === "sing") void music.voice(move.id, t);
     }
   }
@@ -101,7 +124,9 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       if (bt === undefined || n <= bt + config.scoreWindowMs / 1000) continue;
       p.scored = true;
       if (p.move.cue === "trap") popup(null, "NO SONG = DON'T MOVE", GOLD);
-      handleEvents(scoring.scoreMove(p.move, bt));
+      const events = scoring.scoreMove(p.move, bt);
+      roundLog?.moves.push({ p, beatTime: bt, bpm: track!.bpms[p.move.beat], events });
+      handleEvents(events);
       if (screen !== "round") return;
     }
     if (audio.currentTime >= roundEnd) endRound("time", null);
@@ -131,6 +156,18 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     else winner = champion ?? 0; // tie: the champion keeps the crown (first round: P1)
     endReason = reason;
     music.stop();
+    if (roundLog) {
+      const log = roundLog;
+      roundLog = null;
+      downloadJson({
+        ...log,
+        endReason: reason, winner, out: [...out], state: st.map((s) => ({ ...s })),
+        // bestUntil: frames for `best` were tracked up to here (beat + 1 s, or earlier if the round ended first).
+        moves: log.moves.map(({ p, beatTime, bpm, events }) => ({
+          id: p.move.id, cue: p.move.cue, beat: p.move.beat, beatTime, bpm, events, best: p.best, bestUntil: Math.min(beatTime + 1, now()),
+        })),
+      }, `round_${Date.now()}.json`);
+    }
     screen = "eliminated";
     screenUntil = audio.currentTime + config.eliminatedScreenSec;
   }
@@ -205,6 +242,34 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     lagResult = `Saved ${Math.round(ms)} ms (median of ${samples.length}, from ${source}). SPACE to redo, ESC to leave.`;
   }
 
+  // ---------- Framing check (before a round) ----------
+
+  /** How well the camera sees a player slot: in view at all, and with enough joints for the scorer. */
+  function framing(id: 0 | 1): "missing" | "step back" | "ready" {
+    const f = latest[id];
+    if (!f || now() - f.t > config.playerGoneSec) return "missing";
+    return frameError(f, REST_POSE) === null ? "step back" : "ready";
+  }
+  const kneesInView = (id: 0 | 1) => [25, 26, 27, 28].every((i) => (latest[id]?.landmarks[i]?.visibility ?? 0) >= config.minJointVisibility);
+  /** The camera slots that must be ready before `m` starts. Before B maps you to slot 0, a solo player may be in either. */
+  const humansReady = (m: Mode) =>
+    m === "duo" ? framing(0) === "ready" && framing(1) === "ready"
+    : mode === "bot" ? framing(0) === "ready" : framing(0) === "ready" || framing(1) === "ready";
+
+  /** Start a round only once the camera can see every human well enough to judge them. F starts anyway. */
+  function tryStart(m: Mode, force = false) {
+    if (!force && video && !humansReady(m)) {
+      blocked = m;
+      return;
+    }
+    blocked = null;
+    if (screen === "title") {
+      mode = m;
+      champion = null;
+    }
+    void startRound();
+  }
+
   // ---------- Input ----------
 
   addEventListener("keydown", (e) => {
@@ -212,25 +277,42 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     if (e.repeat) return;
     if (e.code === "Space") {
       e.preventDefault();
-      if (screen === "title") mode = "duo";
-      if (screen === "title" || screen === "challenger") void startRound();
+      if (screen === "title") tryStart(spaceMode);
+      else if (screen === "challenger") tryStart(mode);
       else if (screen === "lag") lagDone ? void startLag() : lagSample(audio.currentTime, lagTap);
     } else if (e.code === "KeyB" && screen === "title") {
-      mode = "bot";
-      champion = null;
-      void startRound();
+      tryStart("bot");
+    } else if (e.code === "KeyF" && blocked && (screen === "title" || screen === "challenger")) {
+      tryStart(blocked, true);
+    } else if (e.code === "KeyD") {
+      debug = !debug;
     } else if (e.code === "KeyL" && (screen === "title" || screen === "challenger")) {
       void startLag();
     } else if (e.code === "Escape") {
       music.stop();
-      if (screen !== "lag") champion = null; // back to the menu: fresh crown
+      if (screen !== "lag") { // back to the menu: fresh crown, and the mode the URL starts with
+        champion = null;
+        mode = spaceMode;
+      }
       screen = screen === "lag" ? lagReturn : "title";
+      blocked = null;
     }
   });
 
   function onFrame(f: PlayerFrame) {
     latest[f.id] = f;
     scoring.addFrame(f);
+    fpsCount[f.id]++;
+    if (roundLog && screen === "round") roundLog.frames.push(f);
+    if ((debug || roundLog) && track) {
+      for (const p of pending) {
+        const bt = track.times[p.move.beat];
+        if (bt === undefined || Math.abs(f.t - bt) > 1) continue;
+        const err = frameError(f, p.move.target);
+        const b = p.best[f.id];
+        if (err !== null && (!b || err < b.err)) p.best[f.id] = { err, dt: f.t - bt };
+      }
+    }
     if (screen === "lag") {
       const lm = f.landmarks;
       const up = lm[15].y < lm[0].y || lm[16].y < lm[0].y; // a wrist above the nose
@@ -484,6 +566,58 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     }
   }
 
+  /** Per-player "step back" hint, and the D debug readout. Drawn on top of everything. */
+  function drawHints(W: number, H: number) {
+    const n = now();
+    // Wall clock on purpose: the audio clock is frozen until the first key press, which made this read 0 on the title.
+    // Debug display only; nothing is timed off it.
+    const wall = performance.now() / 1000;
+    if (wall - fpsAt >= 1) {
+      for (const id of IDS) (fps[id] = fpsCount[id] / Math.max(1e-3, wall - fpsAt)), (fpsCount[id] = 0);
+      fpsAt = wall;
+    }
+    const size = Math.round(H / 40);
+    if ((screen === "title" || screen === "challenger") && video) {
+      // Framing status per player who has to be seen, under their half of the screen.
+      const m = screen === "title" ? spaceMode : mode;
+      const slots: (0 | 1)[] = m === "duo" ? [0, 1] : [mode === "bot" || framing(1) === "missing" ? 0 : 1];
+      for (const id of slots) {
+        const st = framing(id);
+        const x = m === "duo" ? (id === 0 ? W * 0.25 : W * 0.75) : W / 2;
+        const who = m === "duo" ? `P${id + 1}` : "YOU";
+        if (st === "ready") {
+          text(`${who} ✓ READY`, x, H * 0.88, size, "#7cfc00");
+          if (!kneesInView(id)) text("knees out of view: leg moves are skipped", x, H * 0.88 + size * 1.3, size * 0.7, "#aaa");
+        } else {
+          text(st === "missing" ? `${who}: step into the ${m === "duo" ? (id === 0 ? "left" : "right") : "camera"} view` : `${who}: STEP BACK, show both arms and your hips`, x, H * 0.88, size, GOLD);
+        }
+      }
+      if (blocked) text("Waiting until everyone shows READY  ·  F to start anyway", W / 2, H * 0.955, size, RED);
+    }
+    if (screen !== "title" && screen !== "round") return;
+    const shown = shownMove();
+    for (const id of IDS) {
+      if (mode === "bot" && id === 1) continue; // the bot is always in view
+      const f = latest[id];
+      const x = id === 0 ? W * 0.25 : W * 0.75;
+      const fresh = f && n - f.t <= config.playerGoneSec;
+      // frameError is null when too few joints are usable: the scorer can't see enough of this player.
+      if (screen === "round" && fresh && frameError(f, REST_POSE) === null) text("STEP BACK: show both arms and your hips", x, H * 0.9, size, GOLD);
+      if (!debug) continue;
+      const lines = [`P${id + 1}  ${fps[id].toFixed(0)} frames/s  ${fresh ? "" : "NOT SEEN"}`];
+      if (fresh && shown) {
+        const e = frameError(f, shown.p.move.target);
+        lines.push(`now vs ${shown.p.move.id}: ${e === null ? "too few joints" : `${e.toFixed(0)}°`}`);
+      }
+      // Last move whose beat has passed: best error within ±1 s and its offset from the beat.
+      const last = [...pending].reverse().find((p) => (track?.times[p.move.beat] ?? Infinity) < n);
+      const b = last?.best[id];
+      if (last) lines.push(b ? `last ${last.move.id}: best ${b.err.toFixed(0)}° at ${b.dt >= 0 ? "+" : ""}${Math.round(b.dt * 1000)} ms (window ±${config.scoreWindowMs})` : `last ${last.move.id}: no usable frame`);
+      lines.forEach((s, i) => text(s, x, H * 0.62 + i * size * 1.3, size * 0.8, "#9ef"));
+    }
+    if (debug) text(`lag offset ${Math.round(lagSec * 1000)} ms · good ≤ ${config.goodMaxErrorDeg}° · perfect ≤ ${config.perfectMaxErrorDeg}° · D to hide`, W / 2, H * 0.97, size * 0.7, "#9ef");
+  }
+
   function loop() {
     requestAnimationFrame(loop);
     if (screen === "title" && audio.state === "running") music.playTitle(); // no-op while it's already looping
@@ -491,6 +625,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     else if (screen === "eliminated" || screen === "champion") updateScreens();
     else if (screen === "lag") updateLag();
     draw();
+    drawHints(canvas.width, canvas.height);
   }
   loop();
 
