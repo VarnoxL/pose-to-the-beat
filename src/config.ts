@@ -12,7 +12,7 @@ export const config = {
   noTrapsBeforeMove: 3, // moves with index < 3 (0-based, per round) are never traps
 
   // Scoring (mean absolute angle error in degrees, over visible joints)
-  scoreWindowMs: 150, // best match within ±window around the beat counts
+  scoreWindowMs: 200, // best match within ±window around the beat counts (150 was tighter than real camera + detection delay)
   perfectMaxErrorDeg: 15,
   goodMaxErrorDeg: 30, // also the trap threshold: error <= this on a trap = eliminated
   jointWeights: {
@@ -40,7 +40,8 @@ export const config = {
   ],
 
   // Vision
-  oneEuro: { minCutoff: 1.0, beta: 0.007, dCutoff: 1.0 },
+  // beta is per unit of speed in normalized image coords (0..1/s). 0.007 left a ~1 Hz low-pass that lagged a pose by 230-430 ms.
+  oneEuro: { minCutoff: 1.0, beta: 4, dCutoff: 1.0 },
 
   // Game: screens and timing
   leadInBeats: 3, // first move is scored on beat index 3 = the 4th beat of the first measure
