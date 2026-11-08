@@ -52,9 +52,31 @@ export const config = {
   playerGoneSec: 0.5, // no frame for this long = player left (skeleton hidden; bot mode lets a lone right-side player in)
   characterPoseLerp: 12, // per second; how fast the character eases into the next pose
   musicGain: 0.8,
+  voiceGain: 0.55, // sung move names, a bit under the music
+  gameSong: { bpm: 100, firstBeatSec: 0.39 }, // assets/audio/game.mp3: measured tempo and first beat; rounds play it sped up/slowed down to the tier
+  voiceOnsetThreshold: 0.1, // voice clips: the voice "starts" at the first sample above this fraction of the clip's peak
+  voicePreRollSec: 0.04, // keep this much before the onset so consonants aren't clipped
   lagCalibrationBpm: 100,
   lagCalibrationBeats: 8,
   lagCalibrationMinSamples: 4,
+
+  // Images popping in and out at random spots, only during a round
+  popFx: {
+    roundFadeSec: 0.6, // fade in at round start, out at round end
+    notes: {
+      copies: 8, // how many copies cycle (staggered)
+      showSec: 2.2, // each appearance lasts this long, including its fade in and out
+      gapSec: 1, // hidden this long before popping up somewhere new
+      inOutSec: 0.45, // fade/grow in and fade/shrink out
+      minSize: 0.12, // longest side, fraction of screen height
+      maxSize: 0.2,
+      margin: 0.12, // keep image centres this far (fraction of screen) from the edges
+      maxTiltRad: 0.35,
+      beatPop: 0.06, // extra scale right on the beat
+      alpha: 0.85,
+      blend: "source-over",
+    },
+  },
 
   // Bot opponent (key B on the title screen)
   bot: {

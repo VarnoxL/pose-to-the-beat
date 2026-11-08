@@ -15,10 +15,12 @@ const demo = params.has("demo");
 const replay = params.get("replay");
 
 // TODO when scoring merges: replace createFakeScoring(...) with the real createScoring().
-const scoring = createFakeScoring(await loadMoves());
+const moves = await loadMoves();
+const scoring = createFakeScoring(moves);
 const game = createGame(canvas, scoring, {
   onNewChallenger: (side, mode) => { if (demo || (mode === "bot" && side === 1)) bots.replace(side); },
 });
+game.preloadVoices(moves.map((m) => m.id));
 const bots = startBots(game.onFrame, game.now, game.upcoming, () => (demo ? [0, 1] : game.mode === "bot" ? [1] : []));
 
 // Camera (or replay) frames. In bot mode the one human is always slot 0 (left), whatever half vision gave them.

@@ -50,44 +50,93 @@ export class BeatTrack {
   }
 }
 
+type VoiceClip = { buf: AudioBuffer; start: number; end: number };
+
+/** Where the voice starts and ends in a recording: first/last sample above a fraction of the peak. */
+function voiceClip(buf: AudioBuffer): VoiceClip {
+  const d = buf.getChannelData(0);
+  let peak = 0;
+  for (const v of d) peak = Math.max(peak, Math.abs(v));
+  const th = peak * config.voiceOnsetThreshold;
+  let s = 0, e = d.length - 1;
+  while (s < e && Math.abs(d[s]) < th) s++;
+  while (e > s && Math.abs(d[e]) < th) e--;
+  return { buf, start: Math.max(0, s / buf.sampleRate - config.voicePreRollSec), end: e / buf.sampleRate };
+}
+
 /** Songs per tempo tier (public/assets/audio/song_<bpm>.ogg), voice lines, and a click track fallback. */
 export class Music {
   private songs = new Map<number, AudioBuffer>();
-  private voices = new Map<string, AudioBuffer | null>();
+  private voices = new Map<string, Promise<VoiceClip | null>>();
+  private title: AudioBuffer | null = null;
+  private titlePlaying = false;
+  private game: AudioBuffer | null = null; // the round song, used for every tier without its own song_<bpm>.ogg
   private source: AudioBufferSourceNode | null = null;
   private out: GainNode;
+  private voiceOut: GainNode;
 
   constructor(private ctx: AudioContext) {
     this.out = ctx.createGain();
     this.out.gain.value = config.musicGain;
     this.out.connect(ctx.destination);
+    this.voiceOut = ctx.createGain();
+    this.voiceOut.gain.value = config.voiceGain;
+    this.voiceOut.connect(ctx.destination);
   }
 
   async load() {
-    await Promise.all(config.tempoTiers.map(async ({ bpm }) => {
-      const buf = await this.fetchBuffer(`assets/audio/song_${bpm}.ogg`);
-      if (buf) this.songs.set(bpm, buf);
-    }));
+    await Promise.all([
+      ...config.tempoTiers.map(async ({ bpm }) => {
+        const buf = await this.fetchBuffer(`assets/audio/song_${bpm}.ogg`);
+        if (buf) this.songs.set(bpm, buf);
+      }),
+      this.fetchBuffer("assets/audio/title.mp3").then((buf) => void (this.title = buf)),
+      this.fetchBuffer("assets/audio/game.mp3").then((buf) => void (this.game = buf)),
+    ]);
   }
 
-  hasSong(bpm: number) { return this.songs.has(bpm); }
+  /** Loop the welcome-screen music. Does nothing if it's already playing or hasn't loaded yet. */
+  playTitle() {
+    if (this.titlePlaying || !this.title) return;
+    this.stop();
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.title;
+    src.loop = true;
+    src.connect(this.out);
+    src.start();
+    this.source = src;
+    this.titlePlaying = true;
+  }
 
-  /** Switch to the song for `bpm` at `when`, positioned as if it had been playing since beat 0. */
+  hasSong(bpm: number) { return this.songs.has(bpm) || !!this.game; }
+
+  /**
+   * Switch to the song for `bpm` at `when`, positioned as if it had been playing since beat 0.
+   * A per-tier song_<bpm>.ogg wins; otherwise the one round song is sped up/slowed down to `bpm`
+   * (playbackRate, so pitch follows) and lined up so its beats land on ours.
+   */
   playSong(bpm: number, when: number, beatIndex: number) {
     this.stop(when);
-    const buf = this.songs.get(bpm);
+    const tierSong = this.songs.get(bpm);
+    const buf = tierSong ?? this.game;
     if (!buf) return;
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.loop = true;
     src.connect(this.out);
-    src.start(when, ((beatIndex * 60) / bpm) % buf.duration);
+    if (tierSong) {
+      src.start(when, ((beatIndex * 60) / bpm) % buf.duration);
+    } else {
+      src.playbackRate.value = bpm / config.gameSong.bpm;
+      src.start(when, (config.gameSong.firstBeatSec + (beatIndex * 60) / config.gameSong.bpm) % buf.duration);
+    }
     this.source = src;
   }
 
   stop(when = this.ctx.currentTime) {
     try { this.source?.stop(when); } catch { /* already stopped */ }
     this.source = null;
+    this.titlePlaying = false;
   }
 
   /** Click track: used for the lag screen, and in rounds while a tier has no song yet. */
@@ -102,15 +151,23 @@ export class Music {
     osc.stop(when + 0.06);
   }
 
-  /** Sung line for a move (public/assets/audio/voice/<moveId>.ogg). Silently skipped if missing. */
-  async voice(moveId: string, when: number) {
-    if (!this.voices.has(moveId)) this.voices.set(moveId, await this.fetchBuffer(`assets/audio/voice/${moveId}.ogg`));
-    const buf = this.voices.get(moveId);
-    if (!buf || when < this.ctx.currentTime) return;
+  /** Fetch and decode voice clips ahead of time, so the first call of each isn't late. */
+  preloadVoices(ids: string[]) {
+    for (const id of ids) {
+      if (this.voices.has(id)) continue;
+      this.voices.set(id, this.fetchBuffer(`assets/audio/voice/${id}.m4a`).then((buf) => buf && voiceClip(buf)));
+    }
+  }
+
+  /** A move's sung line (<moveId>), with its leading silence cut so the voice itself lands on `when`. Skipped if missing. */
+  async voice(id: string, when: number) {
+    this.preloadVoices([id]);
+    const clip = await this.voices.get(id);
+    if (!clip || when < this.ctx.currentTime) return;
     const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(this.out);
-    src.start(when);
+    src.buffer = clip.buf;
+    src.connect(this.voiceOut);
+    src.start(when, clip.start);
   }
 
   private async fetchBuffer(url: string): Promise<AudioBuffer | null> {

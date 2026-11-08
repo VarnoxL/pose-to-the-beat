@@ -5,6 +5,7 @@ import { JOINTS, type GameEvent, type Joint, type Move, type PlayerFrame } from 
 import { BeatTrack, Music, loadLagSec, saveLagMs } from "./audio";
 import { REST_POSE, drawSkeleton, mirrored, poseToLandmarks, type Rect } from "./pose";
 import type { Scoring } from "./scoringApi";
+import { createPopFx } from "./pop";
 
 type Screen = "title" | "round" | "eliminated" | "champion" | "challenger" | "lag";
 type Pending = { move: Move; previewTime: number; scored: boolean };
@@ -21,6 +22,9 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   const ctx = canvas.getContext("2d")!;
   const audio = new AudioContext();
   const music = new Music(audio);
+  const noteFx = createPopFx("assets/images/neon-notes.png", config.popFx.notes, 2);
+  const titleImg = new Image();
+  titleImg.src = "assets/images/title.webp";
   void music.load();
   let lagSec = loadLagSec();
   /** Audio-clock seconds minus lag: the clock PlayerFrame.t uses. */
@@ -65,6 +69,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
 
   async function startRound() {
     await audio.resume();
+    music.stop(); // title music
     scoring.reset(champion);
     pending = [];
     popups = [];
@@ -264,6 +269,15 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
         ctx.fillStyle = "rgba(0,0,0,0.35)";
         ctx.fillRect(0, 0, W, H);
       }
+    });
+    // Neon notes go between the camera and the skeletons, unmirrored so the images aren't flipped.
+    let pulse = 0;
+    if (track && screen === "round") {
+      const bc = track.at(audio.currentTime);
+      if (bc.beatIndex >= 0) pulse = Math.pow(bc.msToNextBeat / 1000 / (60 / bc.bpm), 3);
+    }
+    noteFx(ctx, W, H, audio.currentTime, screen === "round", pulse);
+    mirrored(ctx, () => {
       for (const id of IDS) {
         const f = latest[id];
         if (!f || n - f.t > config.playerGoneSec) continue;
@@ -424,17 +438,15 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     const st = scoring.state;
     const scores = `${NAMES()[0]} ${st[0].score}  —  ${NAMES()[1]} ${st[1].score}`;
     if (screen === "title") {
-      drawOverlay([
-        ["POSE TO THE BEAT", 2.4, GOLD],
-        ["Keep the flow. Don't break the beat.", 0.9, "#ccc"],
-        ["", 0.5],
-        ["Copy the move when the character SINGS it.", 0.8],
-        ["No song? Don't move. That's a trap.", 0.8, RED],
-        ["", 0.5],
-        ["SPACE  ·  1v1, two players side by side", 1.1, "#fff"],
-        ["B  ·  you vs the bot (stand on the left)", 0.9, "#ccc"],
-        [status, 0.6, RED],
-      ], W, H);
+      // The team's title art, whole (fit inside the screen, black around it), with its text baked in.
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, W, H);
+      if (titleImg.complete && titleImg.naturalWidth) {
+        const s = Math.min(W / titleImg.naturalWidth, H / titleImg.naturalHeight);
+        const w = titleImg.naturalWidth * s, h = titleImg.naturalHeight * s;
+        ctx.drawImage(titleImg, (W - w) / 2, (H - h) / 2, w, h);
+      }
+      if (status) text(status, W / 2, H - H / 30, Math.round(H / 40), RED);
     } else if (screen === "eliminated") {
       const head = endReason === "time" ? "TIME!" : out[0] && out[1] ? "BOTH OUT" : `${NAMES()[out[0] ? 0 : 1]} ${verb(out[0] ? 0 : 1, "IS", "ARE")} OUT`;
       drawOverlay([[head, 2.4, endReason === "time" ? GOLD : RED], [scores, 1]], W, H);
@@ -474,6 +486,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
 
   function loop() {
     requestAnimationFrame(loop);
+    if (screen === "title" && audio.state === "running") music.playTitle(); // no-op while it's already looping
     if (screen === "round") updateRound();
     else if (screen === "eliminated" || screen === "champion") updateScreens();
     else if (screen === "lag") updateLag();
@@ -486,6 +499,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     onFrame,
     setVideo: (v: HTMLVideoElement) => void (video = v),
     setStatus: (s: string) => void (status = s),
+    preloadVoices: (ids: string[]) => music.preloadVoices(ids),
     get mode() { return mode; },
     /** The next unscored move the character is showing, for fake/bot players. */
     upcoming(): Upcoming {
