@@ -72,16 +72,44 @@ export class Music {
   private titlePlaying = false;
   private game: AudioBuffer | null = null; // the round song, used for every tier without its own song_<bpm>.ogg
   private source: AudioBufferSourceNode | null = null;
+  /** Where the round song is: started at `when` from buffer time `offset`, playing at `rate`. */
+  private roundSong: { when: number; offset: number; rate: number } | null = null;
   private out: GainNode;
+  private songOut: GainNode;
   private voiceOut: GainNode;
+  private trapVoiceOut: GainNode; // the decoy voice on trap moves (voice/trap/*): make-up gain at the end of its chain
+  private trapVoiceIn: AudioNode; // start of the decoy chain (EQ + compressor)
 
   constructor(private ctx: AudioContext) {
     this.out = ctx.createGain();
     this.out.gain.value = config.musicGain;
     this.out.connect(ctx.destination);
+    this.songOut = ctx.createGain();
+    this.songOut.gain.value = config.roundMusicGain;
+    this.songOut.connect(ctx.destination);
     this.voiceOut = ctx.createGain();
     this.voiceOut.gain.value = config.voiceGain;
     this.voiceOut.connect(ctx.destination);
+    // Decoy voice chain: cut low rumble → lift speech presence → compress the peaks → make-up gain.
+    // The compressor is what lets trapVoiceGain go above 1 without the loud syllables clipping.
+    const fx = config.trapVoiceFx;
+    const highpass = new BiquadFilterNode(ctx, { type: "highpass", frequency: fx.highpassHz });
+    const presence = new BiquadFilterNode(ctx, { type: "peaking", frequency: fx.presenceHz, Q: 1, gain: fx.presenceDb });
+    const comp = new DynamicsCompressorNode(ctx, { threshold: fx.compThresholdDb, ratio: fx.compRatio, knee: 6, attack: 0.003, release: 0.15 });
+    this.trapVoiceOut = ctx.createGain();
+    this.trapVoiceOut.gain.value = config.trapVoiceGain;
+    highpass.connect(presence).connect(comp).connect(this.trapVoiceOut).connect(ctx.destination);
+    this.trapVoiceIn = highpass;
+  }
+
+  /** Dip the round song while a voice line speaks (from `when` for `sec`), so the call cuts through. */
+  private duckSong(when: number, sec: number) {
+    const g = this.songOut.gain, full = config.roundMusicGain, low = full * config.voiceDuck.musicLevel, f = config.voiceDuck.fadeSec;
+    g.cancelScheduledValues(Math.max(this.ctx.currentTime, when - f));
+    g.setValueAtTime(full, Math.max(this.ctx.currentTime, when - f));
+    g.linearRampToValueAtTime(low, when);
+    g.setValueAtTime(low, when + sec);
+    g.linearRampToValueAtTime(full, when + sec + f);
   }
 
   async load() {
@@ -111,11 +139,13 @@ export class Music {
   hasSong(bpm: number) { return this.songs.has(bpm) || !!this.game; }
 
   /**
-   * Switch to the song for `bpm` at `when`, positioned as if it had been playing since beat 0.
-   * A per-tier song_<bpm>.ogg wins; otherwise the one round song is sped up/slowed down to `bpm`
-   * (playbackRate, so pitch follows) and lined up so its beats land on ours.
+   * Switch to the song for `bpm` at `when`. A per-tier song_<bpm>.ogg wins, positioned as if it had
+   * been playing since beat 0. Otherwise the one round song is sped up/slowed down (playbackRate, so
+   * pitch follows) so its beats land on ours: one song beat per game beat, or two (half-time) when
+   * that keeps the speed closer to normal. On a tempo change it carries on from where it was.
    */
   playSong(bpm: number, when: number, beatIndex: number) {
+    const prev = this.roundSong;
     this.stop(when);
     const tierSong = this.songs.get(bpm);
     const buf = tierSong ?? this.game;
@@ -123,12 +153,17 @@ export class Music {
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.loop = true;
-    src.connect(this.out);
+    src.connect(this.songOut);
     if (tierSong) {
       src.start(when, ((beatIndex * 60) / bpm) % buf.duration);
     } else {
-      src.playbackRate.value = bpm / config.gameSong.bpm;
-      src.start(when, (config.gameSong.firstBeatSec + (beatIndex * 60) / config.gameSong.bpm) % buf.duration);
+      const { bpm: songBpm, firstBeatSec } = config.gameSong;
+      const perBeat = [1, 2].reduce((a, b) => (Math.abs(Math.log((bpm * b) / songBpm)) < Math.abs(Math.log((bpm * a) / songBpm)) ? b : a));
+      const rate = (bpm * perBeat) / songBpm;
+      const offset = prev ? prev.offset + (when - prev.when) * prev.rate : firstBeatSec + (beatIndex * perBeat * 60) / songBpm;
+      src.playbackRate.value = rate;
+      src.start(when, offset % buf.duration);
+      this.roundSong = { when, offset, rate };
     }
     this.source = src;
   }
@@ -137,6 +172,7 @@ export class Music {
     try { this.source?.stop(when); } catch { /* already stopped */ }
     this.source = null;
     this.titlePlaying = false;
+    this.roundSong = null;
   }
 
   /** Click track: used for the lag screen, and in rounds while a tier has no song yet. */
@@ -166,7 +202,8 @@ export class Music {
     if (!clip || when < this.ctx.currentTime) return;
     const src = this.ctx.createBufferSource();
     src.buffer = clip.buf;
-    src.connect(this.voiceOut);
+    src.connect(id.startsWith("trap/") ? this.trapVoiceIn : this.voiceOut);
+    this.duckSong(when, clip.end - clip.start);
     src.start(when, clip.start);
   }
 

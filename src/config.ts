@@ -67,9 +67,19 @@ export const config = {
   characterPoseLerp: 12, // per second; how fast the character eases into the next pose
   titleCameraDim: 0.25, // title screen: extra darkening of the camera under the title art (0 = none, 1 = black)
   titleArtAlpha: 0.6, // title art opacity over the camera (1 = solid art, lower = players show through more)
-  musicGain: 0.8,
+  musicGain: 0.8, // title music and click track
+  roundMusicGain: 1.15, // the song during a round (song peaks at 0.8, so this stays just under clipping)
   voiceGain: 0.55, // sung move names, a bit under the music
-  gameSong: { bpm: 100, firstBeatSec: 0.39 }, // assets/audio/game.mp3: measured tempo and first beat; rounds play it sped up/slowed down to the tier
+  trapVoiceGain: 1.5, // the decoy voice on trap moves, after its compressor. Rendered offline: every clip peaks ≤ 0.95 at 1.5 (no clipping)
+  trapVoiceFx: {
+    highpassHz: 150, // cut rumble/mud below this
+    presenceHz: 3000, // boost speech clarity around here...
+    presenceDb: 5, // ...by this much
+    compThresholdDb: -24, // compress peaks above this...
+    compRatio: 8, // ...by this ratio, so the make-up gain doesn't clip
+  },
+  voiceDuck: { musicLevel: 0.45, fadeSec: 0.06 }, // round song drops to 45% while any voice line speaks
+  gameSong: { bpm: 129.7, firstBeatSec: 0.089 }, // assets/audio/game.mp3 (Pyromania): measured tempo and first beat; rounds play it sped up/slowed down to the tier
   voiceOnsetThreshold: 0.1, // voice clips: the voice "starts" at the first sample above this fraction of the clip's peak
   voicePreRollSec: 0.04, // keep this much before the onset so consonants aren't clipped
   lagCalibrationBpm: 100,

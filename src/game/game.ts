@@ -25,6 +25,7 @@ export type Upcoming = { move: Move; beatTime: number } | null;
 const COLORS = ["#2de2e6", "#ff3cac"] as const;
 export type Mode = "duo" | "bot"; // duo = 1v1 humans (main mode); bot = one human (left) vs a bot (right)
 const GOLD = "#ffd23f";
+const DECOY = "#b84dff"; // the decoy voice's colour on trap moves
 const RED = "#ff5555";
 const IDS = [0, 1] as const;
 
@@ -111,7 +112,8 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     if (isMoveBeat(mb) && t < roundEnd) {
       const move = scoring.nextMove(mb);
       pending.push({ move, previewTime: t, scored: false, best: [null, null] });
-      if (move.cue === "sing") void music.voice(move.id, t);
+      // The main singer calls real moves; a decoy voice calls traps ("Simon says": only copy the main singer).
+      void music.voice(move.cue === "sing" ? move.id : `trap/${move.id}`, t);
     }
   }
 
@@ -123,7 +125,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       const bt = track!.times[p.move.beat];
       if (bt === undefined || n <= bt + config.scoreWindowMs / 1000) continue;
       p.scored = true;
-      if (p.move.cue === "trap") popup(null, "NOT CALLED = DON'T MOVE", GOLD);
+      if (p.move.cue === "trap") popup(null, "WRONG VOICE = DON'T MOVE", DECOY);
       const events = scoring.scoreMove(p.move, bt);
       roundLog?.moves.push({ p, beatTime: bt, bpm: track!.bpms[p.move.beat], events });
       handleEvents(events);
@@ -425,10 +427,11 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     const lm = poseToLandmarks(charPose, 0.5, 0.62, 0.7, w / h);
     mirrored(ctx, () => drawSkeleton(ctx, lm, rect, "#fff", Math.max(6, H / 70)));
 
-    // Sung line: bubble with the move's name. A trap shows the move with no bubble (no singing).
-    if (shown && shown.p.move.cue === "sing" && audio.currentTime < shown.beatTime + 0.3) {
+    // Called line: bubble with the move's name. Gold = the main singer (copy it); purple = the decoy
+    // voice on a trap (don't). The colour is the tell for players who can't hear the voices apart.
+    if (shown && audio.currentTime < shown.beatTime + 0.3) {
       const label = `♪ ${shown.p.move.id.replace(/_/g, " ").toUpperCase()} ♪`;
-      text(label, cx, rect.y - H * 0.02, Math.round(H / 18), GOLD);
+      text(label, cx, rect.y - H * 0.02, Math.round(H / 18), shown.p.move.cue === "sing" ? GOLD : DECOY);
     }
   }
 

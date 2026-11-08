@@ -11,11 +11,11 @@ It runs entirely in the browser. There's no server, no install for players, and 
 1. Stand back from the webcam until your **hips and both arms** are in frame. Two players stand side by side, one on each half of the screen.
 2. Press **Space** to start.
 3. Each move takes four beats. The move is shown on beat 1, and you hold the pose on beat 4.
-4. **Called moves:** the voice sings the move's name. Copy it.
+4. **Called moves:** the main singer sings the move's name (gold bubble). Copy it.
    - **Perfect** (within 15°) scores 300 points.
    - **Good** (within 22°) scores 100 points.
    - A **miss** costs one of your 2 lives.
-5. **Traps:** the move is shown but not called, and a "NOT CALLED" popup appears. Don't copy it. Copying a trap eliminates you on the spot. Standing still is safe.
+5. **Traps:** a different (decoy) voice calls the move (purple bubble), like "Simon says". Don't copy it. Copying a trap eliminates you on the spot. Standing still is safe. A "WRONG VOICE" popup appears after the beat.
 6. Hit moves in a row to build **flow**. The leader's flow speeds up the tempo, from 78 up to 132 bpm.
 7. A round lasts 45 seconds. If it hits the time cap, the higher score wins. The winner keeps the crown for the next challenger.
 
