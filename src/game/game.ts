@@ -40,7 +40,8 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   addEventListener("pointerdown", resume);
 
   let screen: Screen = "title";
-  let mode: Mode = "duo";
+  let mode: Mode = spaceMode;
+  let blocked: Mode | null = null; // a start was refused by the framing check; F forces it
   let status = ""; // shown on the title screen (camera errors etc.)
   const NAMES = () => (mode === "bot" ? ["YOU", "BOT"] : ["P1", "P2"]);
   const verb = (id: number, they: string, you: string) => (mode === "bot" && id === 0 ? you : they);
@@ -156,7 +157,10 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       downloadJson({
         ...log,
         endReason: reason, winner, out: [...out], state: st.map((s) => ({ ...s })),
-        moves: log.moves.map(({ p, beatTime, bpm, events }) => ({ id: p.move.id, cue: p.move.cue, beat: p.move.beat, beatTime, bpm, events, best: p.best })),
+        // bestUntil: frames for `best` were tracked up to here (beat + 1 s, or earlier if the round ended first).
+        moves: log.moves.map(({ p, beatTime, bpm, events }) => ({
+          id: p.move.id, cue: p.move.cue, beat: p.move.beat, beatTime, bpm, events, best: p.best, bestUntil: Math.min(beatTime + 1, now()),
+        })),
       }, `round_${Date.now()}.json`);
     }
     screen = "eliminated";
@@ -233,6 +237,34 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     lagResult = `Saved ${Math.round(ms)} ms (median of ${samples.length}, from ${source}). SPACE to redo, ESC to leave.`;
   }
 
+  // ---------- Framing check (before a round) ----------
+
+  /** How well the camera sees a player slot: in view at all, and with enough joints for the scorer. */
+  function framing(id: 0 | 1): "missing" | "step back" | "ready" {
+    const f = latest[id];
+    if (!f || now() - f.t > config.playerGoneSec) return "missing";
+    return frameError(f, REST_POSE) === null ? "step back" : "ready";
+  }
+  const kneesInView = (id: 0 | 1) => [25, 26, 27, 28].every((i) => (latest[id]?.landmarks[i]?.visibility ?? 0) >= config.minJointVisibility);
+  /** The camera slots that must be ready before `m` starts. Before B maps you to slot 0, a solo player may be in either. */
+  const humansReady = (m: Mode) =>
+    m === "duo" ? framing(0) === "ready" && framing(1) === "ready"
+    : mode === "bot" ? framing(0) === "ready" : framing(0) === "ready" || framing(1) === "ready";
+
+  /** Start a round only once the camera can see every human well enough to judge them. F starts anyway. */
+  function tryStart(m: Mode, force = false) {
+    if (!force && video && !humansReady(m)) {
+      blocked = m;
+      return;
+    }
+    blocked = null;
+    if (screen === "title") {
+      mode = m;
+      champion = null;
+    }
+    void startRound();
+  }
+
   // ---------- Input ----------
 
   addEventListener("keydown", (e) => {
@@ -240,24 +272,22 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     if (e.repeat) return;
     if (e.code === "Space") {
       e.preventDefault();
-      if (screen === "title") {
-        mode = spaceMode;
-        champion = null;
-      }
-      if (screen === "title" || screen === "challenger") void startRound();
+      if (screen === "title") tryStart(spaceMode);
+      else if (screen === "challenger") tryStart(mode);
       else if (screen === "lag") lagDone ? void startLag() : lagSample(audio.currentTime, lagTap);
     } else if (e.code === "KeyB" && screen === "title") {
-      mode = "bot";
-      champion = null;
-      void startRound();
+      tryStart("bot");
+    } else if (e.code === "KeyF" && blocked && (screen === "title" || screen === "challenger")) {
+      tryStart(blocked, true);
     } else if (e.code === "KeyD") {
       debug = !debug;
     } else if (e.code === "KeyL" && (screen === "title" || screen === "challenger")) {
       void startLag();
     } else if (e.code === "Escape") {
       music.stop();
-      if (screen !== "lag") champion = null; // back to the menu: fresh crown
+      if (screen !== "lag") (champion = null), (mode = spaceMode); // back to the menu: fresh crown
       screen = screen === "lag" ? lagReturn : "title";
+      blocked = null;
     }
   });
 
@@ -532,16 +562,33 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       for (const id of IDS) (fps[id] = fpsCount[id] / Math.max(1e-3, wall - fpsAt)), (fpsCount[id] = 0);
       fpsAt = wall;
     }
+    const size = Math.round(H / 40);
+    if ((screen === "title" || screen === "challenger") && video) {
+      // Framing status per player who has to be seen, under their half of the screen.
+      const m = screen === "title" ? spaceMode : mode;
+      const slots: (0 | 1)[] = m === "duo" ? [0, 1] : [mode === "bot" || framing(1) === "missing" ? 0 : 1];
+      for (const id of slots) {
+        const st = framing(id);
+        const x = m === "duo" ? (id === 0 ? W * 0.25 : W * 0.75) : W / 2;
+        const who = m === "duo" ? `P${id + 1}` : "YOU";
+        if (st === "ready") {
+          text(`${who} ✓ READY`, x, H * 0.88, size, "#7cfc00");
+          if (!kneesInView(id)) text("knees out of view: leg moves are skipped", x, H * 0.88 + size * 1.3, size * 0.7, "#aaa");
+        } else {
+          text(st === "missing" ? `${who}: step into the ${m === "duo" ? (id === 0 ? "left" : "right") : "camera"} view` : `${who}: STEP BACK, show both arms and your hips`, x, H * 0.88, size, GOLD);
+        }
+      }
+      if (blocked) text("Waiting until everyone shows READY  ·  F to start anyway", W / 2, H * 0.955, size, RED);
+    }
     if (screen !== "title" && screen !== "round") return;
     const shown = shownMove();
-    const size = Math.round(H / 40);
     for (const id of IDS) {
       if (mode === "bot" && id === 1) continue; // the bot is always in view
       const f = latest[id];
       const x = id === 0 ? W * 0.25 : W * 0.75;
       const fresh = f && n - f.t <= config.playerGoneSec;
       // frameError is null when too few joints are usable: the scorer can't see enough of this player.
-      if (fresh && frameError(f, REST_POSE) === null) text("STEP BACK: show both arms and your hips", x, H * 0.9, size, GOLD);
+      if (screen === "round" && fresh && frameError(f, REST_POSE) === null) text("STEP BACK: show both arms and your hips", x, H * 0.9, size, GOLD);
       if (!debug) continue;
       const lines = [`P${id + 1}  ${fps[id].toFixed(0)} frames/s  ${fresh ? "" : "NOT SEEN"}`];
       if (fresh && shown) {
