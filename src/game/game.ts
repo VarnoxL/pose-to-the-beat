@@ -6,11 +6,19 @@ import { BeatTrack, Music, loadLagSec, saveLagMs } from "./audio";
 import { REST_POSE, drawSkeleton, mirrored, poseToLandmarks, type Rect } from "./pose";
 import type { Scoring } from "./scoringApi";
 import { frameError } from "../scoring";
+import { downloadJson } from "../vision";
 
 type Screen = "title" | "round" | "eliminated" | "champion" | "challenger" | "lag";
 /** `best` is for the D debug readout: each player's lowest error within ±1 s of the beat, and when it happened. */
 type Pending = { move: Move; previewTime: number; scored: boolean; best: ({ err: number; dt: number } | null)[] };
 type Popup = { player: 0 | 1 | null; text: string; color: string; time: number };
+/** ?log: one file per round with every move, how it was graded, and the raw frames, so it can be re-scored offline. */
+type RoundLog = {
+  recordedAt: string; mode: Mode; lagMs: number; roundStart: number;
+  config: { scoreWindowMs: number; perfectMaxErrorDeg: number; goodMaxErrorDeg: number; oneEuro: typeof config.oneEuro };
+  moves: { p: Pending; beatTime: number; bpm: number; events: GameEvent[] }[];
+  frames: PlayerFrame[];
+};
 export type Upcoming = { move: Move; beatTime: number } | null;
 
 const COLORS = ["#2de2e6", "#ff3cac"] as const;
@@ -19,7 +27,7 @@ const GOLD = "#ffd23f";
 const RED = "#ff5555";
 const IDS = [0, 1] as const;
 
-export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1, mode: Mode) => void; spaceMode?: Mode } = {}) {
+export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { onNewChallenger?: (side: 0 | 1, mode: Mode) => void; spaceMode?: Mode; log?: boolean } = {}) {
   const spaceMode = opts.spaceMode ?? "duo"; // what SPACE starts on the title (?bot makes it "bot")
   const ctx = canvas.getContext("2d")!;
   const audio = new AudioContext();
@@ -44,6 +52,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
   let debug = false; // key D
   const fps = [0, 0], fpsCount = [0, 0];
   let fpsAt = 0;
+  let roundLog: RoundLog | null = null;
 
   // Round state
   let track: BeatTrack | null = null;
@@ -79,6 +88,13 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     const t0 = audio.currentTime + config.startDelaySec;
     roundEnd = t0 + config.roundSeconds;
     track = new BeatTrack(t0, () => scoring.tempoBpm(), onBeat);
+    if (opts.log) {
+      const { scoreWindowMs, perfectMaxErrorDeg, goodMaxErrorDeg, oneEuro } = config;
+      roundLog = {
+        recordedAt: new Date().toISOString(), mode, lagMs: Math.round(lagSec * 1000), roundStart: t0 - lagSec,
+        config: { scoreWindowMs, perfectMaxErrorDeg, goodMaxErrorDeg, oneEuro }, moves: [], frames: [],
+      };
+    }
     screen = "round";
   }
 
@@ -102,7 +118,9 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       if (bt === undefined || n <= bt + config.scoreWindowMs / 1000) continue;
       p.scored = true;
       if (p.move.cue === "trap") popup(null, "NO SONG = DON'T MOVE", GOLD);
-      handleEvents(scoring.scoreMove(p.move, bt));
+      const events = scoring.scoreMove(p.move, bt);
+      roundLog?.moves.push({ p, beatTime: bt, bpm: track!.bpms[p.move.beat], events });
+      handleEvents(events);
       if (screen !== "round") return;
     }
     if (audio.currentTime >= roundEnd) endRound("time", null);
@@ -132,6 +150,15 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     else winner = champion ?? 0; // tie: the champion keeps the crown (first round: P1)
     endReason = reason;
     music.stop();
+    if (roundLog) {
+      const log = roundLog;
+      roundLog = null;
+      downloadJson({
+        ...log,
+        endReason: reason, winner, out: [...out], state: st.map((s) => ({ ...s })),
+        moves: log.moves.map(({ p, beatTime, bpm, events }) => ({ id: p.move.id, cue: p.move.cue, beat: p.move.beat, beatTime, bpm, events, best: p.best })),
+      }, `round_${Date.now()}.json`);
+    }
     screen = "eliminated";
     screenUntil = audio.currentTime + config.eliminatedScreenSec;
   }
@@ -238,7 +265,8 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     latest[f.id] = f;
     scoring.addFrame(f);
     fpsCount[f.id]++;
-    if (debug && track) {
+    if (roundLog && screen === "round") roundLog.frames.push(f);
+    if ((debug || roundLog) && track) {
       for (const p of pending) {
         const bt = track.times[p.move.beat];
         if (bt === undefined || Math.abs(f.t - bt) > 1) continue;
