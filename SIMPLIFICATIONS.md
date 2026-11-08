@@ -14,3 +14,4 @@ Every shortcut we take, so Q&A answers stay honest. One line each: what, why, an
 - In bot mode the one human is always slot 0 (left); if two people are on camera, the left one plays. (Game, hour 1)
 - Scoring's move list is hardcoded in `src/scoring/index.ts` (static hosting can't list a folder); add the id there when adding a move file. (Scoring, hour 18)
 - Moves the camera cannot judge for a player (their key joints are not visible, e.g. leg moves with knees out of frame) are skipped when dealing, instead of being graded on the joints that are visible. With no full-body framing, right_knee and sumo_squat never come up. (Scoring, playtest 1)
+- **Round music:** one song (`game.mp3`, 100 BPM) covers every tempo tier, played sped up or slowed down with `playbackRate`, so its pitch shifts with the tier. A `song_<bpm>.ogg` for a tier replaces it for that tier. (Game)
