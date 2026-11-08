@@ -123,7 +123,7 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       const bt = track!.times[p.move.beat];
       if (bt === undefined || n <= bt + config.scoreWindowMs / 1000) continue;
       p.scored = true;
-      if (p.move.cue === "trap") popup(null, "NO SONG = DON'T MOVE", GOLD);
+      if (p.move.cue === "trap") popup(null, "NOT CALLED = DON'T MOVE", GOLD);
       const events = scoring.scoreMove(p.move, bt);
       roundLog?.moves.push({ p, beatTime: bt, bpm: track!.bpms[p.move.beat], events });
       handleEvents(events);
@@ -520,13 +520,17 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
     const st = scoring.state;
     const scores = `${NAMES()[0]} ${st[0].score}  —  ${NAMES()[1]} ${st[1].score}`;
     if (screen === "title") {
-      // The team's title art, whole (fit inside the screen, black around it), with its text baked in.
-      ctx.fillStyle = "#000";
+      // The team's title art, whole (fit inside the screen), with its text baked in. Its background is
+      // black, so a "screen" blend makes the black see-through: players still see themselves (and the
+      // framing hints) to get READY. The camera is dimmed a bit more first so the text stays readable.
+      ctx.fillStyle = `rgba(0,0,0,${config.titleCameraDim})`;
       ctx.fillRect(0, 0, W, H);
       if (titleImg.complete && titleImg.naturalWidth) {
         const s = Math.min(W / titleImg.naturalWidth, H / titleImg.naturalHeight);
         const w = titleImg.naturalWidth * s, h = titleImg.naturalHeight * s;
+        ctx.globalCompositeOperation = "screen";
         ctx.drawImage(titleImg, (W - w) / 2, (H - h) / 2, w, h);
+        ctx.globalCompositeOperation = "source-over";
       }
       if (status) text(status, W / 2, H - H / 30, Math.round(H / 40), RED);
     } else if (screen === "eliminated") {
