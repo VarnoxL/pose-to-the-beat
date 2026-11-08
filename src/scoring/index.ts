@@ -20,19 +20,43 @@ export async function loadMoves(): Promise<MoveDef[]> {
   return moves.filter((m): m is MoveDef => !!m);
 }
 
-/** Weighted mean angle error over visible joints, or null if too few joints are visible. */
+const usable = (f: PlayerFrame, j: Joint) =>
+  Math.min(...JOINT_LANDMARKS[j].map((i) => f.landmarks[i]?.visibility ?? 0)) >= config.minJointVisibility;
+
+/**
+ * The joints that define a move: far enough from standing still that the move can't be judged without seeing them.
+ * Without this, right_knee graded on arms alone (legs out of frame) was "arms down" = standing still (playtest 1).
+ */
+export function keyJoints(target: Record<Joint, number>): Joint[] {
+  return JOINTS.filter((j) => config.jointWeights[j] && Math.abs(target[j] - config.standingPose[j]) >= config.keyJointMinDiffDeg);
+}
+
+/** Weighted mean angle error over visible joints, or null if too few joints, or any of the move's key joints, are visible. */
 export function frameError(f: PlayerFrame, target: Record<Joint, number>): number | null {
+  if (!keyJoints(target).every((j) => usable(f, j))) return null;
   let sum = 0, wsum = 0, n = 0;
   for (const j of JOINTS) {
     const w = config.jointWeights[j];
-    if (!w) continue;
-    const vis = Math.min(...JOINT_LANDMARKS[j].map((i) => f.landmarks[i]?.visibility ?? 0));
-    if (vis < config.minJointVisibility) continue;
+    if (!w || !usable(f, j)) continue;
     sum += w * Math.abs(f.angles[j] - target[j]);
     wsum += w;
     n++;
   }
   return n < config.minVisibleJoints ? null : sum / wsum;
+}
+
+const UPPER: Joint[] = ["leftElbow", "rightElbow", "leftShoulder", "rightShoulder"];
+/**
+ * How far apart two poses are, as the scorer would see them. Taken over all joints and over the arms alone
+ * (legs are often out of frame), and the smaller one is used, so "far apart" holds either way.
+ */
+export function poseDistance(a: Record<Joint, number>, b: Record<Joint, number>): number {
+  const mean = (js: readonly Joint[]) => {
+    let s = 0, w = 0;
+    for (const j of js) { s += config.jointWeights[j] * Math.abs(a[j] - b[j]); w += config.jointWeights[j]; }
+    return w ? s / w : 0;
+  };
+  return Math.min(mean(JOINTS), mean(UPPER));
 }
 
 export function grade(error: number | null): "perfect" | "good" | "miss" {
@@ -54,21 +78,53 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
   let tier = 0;
   let deck: MoveDef[] = [];
   let lastId = "";
+  let lastTarget: Record<Joint, number> | null = null;
+
+  const shuffle = () => {
+    deck = [...moves];
+    for (let i = deck.length - 1; i > 0; i--) {
+      const k = Math.floor(rand() * (i + 1));
+      [deck[i], deck[k]] = [deck[k], deck[i]];
+    }
+    // Never the move just played, across a reshuffle.
+    if (deck.length > 1 && deck[deck.length - 1].id === lastId) [deck[0], deck[deck.length - 1]] = [deck[deck.length - 1], deck[0]];
+  };
+
+  /**
+   * Can the camera judge this move for everyone still in? Each alive player with recent frames must have the move's
+   * key joints visible in at least half of them. Players with no frames are absent and don't block anything.
+   */
+  const canJudge = (def: MoveDef) => {
+    const keys = keyJoints(def.target);
+    return ([0, 1] as const).every((id) => {
+      const buf = frames[id];
+      if (!state[id].alive || !buf.length) return true;
+      return buf.filter((f) => keys.every((j) => usable(f, j))).length * 2 >= buf.length;
+    });
+  };
+
+  /** Next card from the top that isn't the last move and that `ok` accepts. */
+  const pick = (ok: (d: MoveDef) => boolean) => {
+    for (let i = deck.length - 1; i >= 0; i--) if (deck[i].id !== lastId && ok(deck[i])) return deck.splice(i, 1)[0];
+  };
 
   const deal = (): MoveDef => {
-    if (!deck.length) {
-      deck = [...moves];
-      for (let i = deck.length - 1; i > 0; i--) {
-        const k = Math.floor(rand() * (i + 1));
-        [deck[i], deck[k]] = [deck[k], deck[i]];
-      }
-      // Never the move just played, across a reshuffle.
-      if (deck.length > 1 && deck[deck.length - 1].id === lastId) [deck[0], deck[deck.length - 1]] = [deck[deck.length - 1], deck[0]];
+    if (!deck.length) shuffle();
+    // Skip moves the camera can't judge right now (e.g. leg moves when knees are out of frame). If none is left in
+    // this pass, start a fresh pass; if the camera can judge nothing at all, deal anyway.
+    let def = pick(canJudge);
+    if (!def) {
+      shuffle();
+      def = pick(canJudge) ?? pick(() => true) ?? deck.pop()!;
     }
-    const def = deck.pop()!;
     lastId = def.id;
     return def;
   };
+
+  /** A trap must be clearly away from standing still and from the move before it: holding still is the rule. */
+  const fairTrap = (def: MoveDef) =>
+    poseDistance(def.target, config.standingPose) >= config.trapMinDistanceDeg &&
+    (!lastTarget || poseDistance(def.target, lastTarget) >= config.trapMinDistanceDeg);
 
   return {
     get state() { return state; },
@@ -81,7 +137,8 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
 
     nextMove(beat) {
       const def = deal();
-      const trap = moveCount >= config.noTrapsBeforeMove && rand() < config.trapChance;
+      const trap = moveCount >= config.noTrapsBeforeMove && rand() < config.trapChance && fairTrap(def);
+      lastTarget = def.target;
       moveCount++;
       return { id: def.id, beat, target: def.target, cue: trap ? "trap" : "sing" };
     },
@@ -149,6 +206,7 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
       tier = 0;
       deck = [];
       lastId = "";
+      lastTarget = null;
     },
   };
 }
