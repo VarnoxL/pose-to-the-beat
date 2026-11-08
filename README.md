@@ -28,7 +28,7 @@ It runs entirely in the browser. There's no server, no install for players, and 
 | F | Start anyway when the camera can't fully see a player |
 | L | Calibrate audio lag: tap along to the clicks |
 | D | Toggle the debug readout (pose error and timing) |
-| Esc | Back to the title |
+| Esc | Back to the title (from the lag screen, back to where you were) |
 
 Calibrate lag once per setup (**L**), especially on Bluetooth speakers. If good poses keep missing, press **D**: the readout shows whether the problem is the pose or the timing.
 
