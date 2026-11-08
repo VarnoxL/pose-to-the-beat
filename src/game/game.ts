@@ -496,10 +496,13 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
 
   /** Per-player "step back" hint, and the D debug readout. Drawn on top of everything. */
   function drawHints(W: number, H: number) {
-    const t = audio.currentTime, n = now();
-    if (t - fpsAt >= 1) {
-      for (const id of IDS) (fps[id] = fpsCount[id] / Math.max(1e-3, t - fpsAt)), (fpsCount[id] = 0);
-      fpsAt = t;
+    const n = now();
+    // Wall clock on purpose: the audio clock is frozen until the first key press, which made this read 0 on the title.
+    // Debug display only; nothing is timed off it.
+    const wall = performance.now() / 1000;
+    if (wall - fpsAt >= 1) {
+      for (const id of IDS) (fps[id] = fpsCount[id] / Math.max(1e-3, wall - fpsAt)), (fpsCount[id] = 0);
+      fpsAt = wall;
     }
     if (screen !== "title" && screen !== "round") return;
     const shown = shownMove();
