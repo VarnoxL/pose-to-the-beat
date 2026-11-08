@@ -285,7 +285,10 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
       void startLag();
     } else if (e.code === "Escape") {
       music.stop();
-      if (screen !== "lag") (champion = null), (mode = spaceMode); // back to the menu: fresh crown
+      if (screen !== "lag") { // back to the menu: fresh crown, and the mode the URL starts with
+        champion = null;
+        mode = spaceMode;
+      }
       screen = screen === "lag" ? lagReturn : "title";
       blocked = null;
     }
