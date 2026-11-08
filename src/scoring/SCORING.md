@@ -19,7 +19,7 @@ Implement `Scoring` from `src/game/scoringApi.ts` as `createScoring(moves: MoveD
 
 1. **Move list:** hardcode the 10 ids in `src/scoring`, the same list as in `fake.ts`. Adding a move means editing that one line.
 2. **Move order:** a shuffled deck of all moves. Deal in order and reshuffle when it runs out. The first card after a reshuffle is never the move just played.
-3. **Traps:** moves with per-round index `< noTrapsBeforeMove` are never traps. After that, each move is a trap with chance `trapChance`.
+3. **Traps:** moves with per-round index `< noTrapsBeforeMove` are never traps. After that, each move is a trap with chance `trapChance`. A move is also never a trap if the rest pose (standing still) is within `goodMaxErrorDeg + trapRestMarginDeg` of it, so standing still always survives a trap. With the current numbers that rules out disco, right_knee, supermen, right_biceps and t_pose.
 4. **Per-frame error (SPEC "Scoring" 1):**
    - A joint's visibility is the min `visibility` of its 3 landmarks.
    - Skip a joint if its visibility is `< minJointVisibility` or its weight is 0.

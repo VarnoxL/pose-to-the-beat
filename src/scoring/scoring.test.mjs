@@ -101,8 +101,17 @@ assert.equal(grade(null), "miss");
 
   const always = createScoring(moves, () => 0); // rand 0 = trap whenever allowed
   always.reset(null);
-  const cues = Array.from({ length: 5 }, (_, i) => always.nextMove(i).cue);
-  assert.deepEqual(cues, [...Array(config.noTrapsBeforeMove).fill("sing"), ...Array(5 - config.noTrapsBeforeMove).fill("trap")]);
+  // Standing still must never fail a trap: only moves far from the rest pose may be traps.
+  const { REST_POSE } = await import("../game/pose.ts");
+  const still = { angles: REST_POSE, landmarks: landmarks() };
+  const dealt2 = Array.from({ length: 40 }, (_, i) => always.nextMove(i));
+  dealt2.slice(0, config.noTrapsBeforeMove).forEach((m) => assert.equal(m.cue, "sing", "no traps early"));
+  for (const m of dealt2.slice(config.noTrapsBeforeMove)) {
+    const safe = frameError(still, m.target) > config.goodMaxErrorDeg + config.trapRestMarginDeg;
+    assert.equal(m.cue, safe ? "trap" : "sing", `${m.id}: trap only if standing still is far from it`);
+  }
+  for (const id of ["right_knee", "supermen", "disco"]) assert.ok(dealt2.some((m) => m.id === id && m.cue === "sing"));
+  assert.ok(dealt2.some((m) => m.cue === "trap"), "some moves are still traps");
 }
 
 console.log("scoring rules: all asserts pass\n");

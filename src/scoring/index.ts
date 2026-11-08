@@ -2,6 +2,7 @@
 import { config } from "../config";
 import { JOINTS, type GameEvent, type Joint, type Move, type MoveDef, type PlayerFrame, type PlayerState } from "../types";
 import type { Scoring } from "../game/scoringApi";
+import { REST_POSE } from "../game/pose";
 
 // ponytail: hardcoded because static hosting can't list a folder; add the id here when a move file is added.
 const MOVE_IDS = ["chicken", "disco", "double_bi", "right_biceps", "right_knee", "six_seven", "sumo_squat", "supermen", "t_pose", "y_pose"];
@@ -54,6 +55,9 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
   let tier = 0;
   let deck: MoveDef[] = [];
   let lastId = "";
+  // A player who stands still must survive every trap, so moves that standing still already (nearly) matches are never traps.
+  const still = { angles: REST_POSE, landmarks: Array(33).fill({ visibility: 1 }) } as unknown as PlayerFrame;
+  const trappable = new Set(moves.filter((m) => frameError(still, m.target)! > config.goodMaxErrorDeg + config.trapRestMarginDeg).map((m) => m.id));
 
   const deal = (): MoveDef => {
     if (!deck.length) {
@@ -81,7 +85,7 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
 
     nextMove(beat) {
       const def = deal();
-      const trap = moveCount >= config.noTrapsBeforeMove && rand() < config.trapChance;
+      const trap = moveCount >= config.noTrapsBeforeMove && trappable.has(def.id) && rand() < config.trapChance;
       moveCount++;
       return { id: def.id, beat, target: def.target, cue: trap ? "trap" : "sing" };
     },

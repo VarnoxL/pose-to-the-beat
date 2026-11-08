@@ -10,6 +10,7 @@ export const config = {
   previewBeats: 3, // the character shows the move this many beats before it's scored
   trapChance: 0.15, // per move, once traps are allowed
   noTrapsBeforeMove: 3, // moves with index < 3 (0-based, per round) are never traps
+  trapRestMarginDeg: 10, // a move is never a trap if standing still is within goodMaxErrorDeg + this of it
 
   // Scoring (mean absolute angle error in degrees, over visible joints)
   scoreWindowMs: 200, // best match within ±window around the beat counts (150 was tighter than real camera + detection delay)
