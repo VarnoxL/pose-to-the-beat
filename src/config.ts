@@ -65,7 +65,8 @@ export const config = {
   popupSec: 0.8, // how long PERFECT / GOOD / MISS stays up
   playerGoneSec: 0.5, // no frame for this long = player left (skeleton hidden; bot mode lets a lone right-side player in)
   characterPoseLerp: 12, // per second; how fast the character eases into the next pose
-  titleCameraDim: 0.45, // title screen: extra darkening of the camera under the title art (0 = none, 1 = black)
+  titleCameraDim: 0.25, // title screen: extra darkening of the camera under the title art (0 = none, 1 = black)
+  titleArtAlpha: 0.6, // title art opacity over the camera (1 = solid art, lower = players show through more)
   musicGain: 0.8,
   voiceGain: 0.55, // sung move names, a bit under the music
   gameSong: { bpm: 100, firstBeatSec: 0.39 }, // assets/audio/game.mp3: measured tempo and first beat; rounds play it sped up/slowed down to the tier

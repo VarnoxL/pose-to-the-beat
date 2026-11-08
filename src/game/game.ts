@@ -529,7 +529,9 @@ export function createGame(canvas: HTMLCanvasElement, scoring: Scoring, opts: { 
         const s = Math.min(W / titleImg.naturalWidth, H / titleImg.naturalHeight);
         const w = titleImg.naturalWidth * s, h = titleImg.naturalHeight * s;
         ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = config.titleArtAlpha;
         ctx.drawImage(titleImg, (W - w) / 2, (H - h) / 2, w, h);
+        ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = "source-over";
       }
       if (status) text(status, W / 2, H - H / 30, Math.round(H / 40), RED);
