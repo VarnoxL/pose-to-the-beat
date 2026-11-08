@@ -96,8 +96,11 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
    */
   const canJudge = (def: MoveDef) => {
     const keys = keyJoints(def.target);
+    // A buffer is only trimmed when its own player sends a frame, so someone who walked out of view leaves stale
+    // frames behind. Only count frames that are recent against the newest frame from either player.
+    const newest = Math.max(...frames.map((b) => b.at(-1)?.t ?? -Infinity));
     return ([0, 1] as const).every((id) => {
-      const buf = frames[id];
+      const buf = frames[id].filter((f) => f.t >= newest - keepSec);
       if (!state[id].alive || !buf.length) return true;
       return buf.filter((f) => keys.every((j) => usable(f, j))).length * 2 >= buf.length;
     });

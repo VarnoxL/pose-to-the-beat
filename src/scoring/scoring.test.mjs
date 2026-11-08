@@ -138,6 +138,11 @@ assert.equal(grade(null), "miss");
   for (const id of ["right_knee", "sumo_squat"]) assert.ok(!dealt3.includes(id), `${id} not dealt while legs are hidden`);
   assert.equal(new Set(dealt3).size, 8, "the other 8 moves still all come up");
   for (let i = 1; i < dealt3.length; i++) assert.notEqual(dealt3[i], dealt3[i - 1], "no repeat");
+
+  // player 0 walks out of view; player 1 keeps sending full-body frames. P0's stale legs-hidden frames stop counting.
+  for (let k = 0; k < 40; k++) s.addFrame({ id: 1, t: 1 + k * 0.05, landmarks: landmarks(), confidence: 1, angles: { ...config.standingPose } });
+  const dealt4 = Array.from({ length: 30 }, (_, i) => s.nextMove(100 + i).id);
+  assert.ok(dealt4.includes("right_knee") && dealt4.includes("sumo_squat"), "leg moves come back once the stale frames age out");
 }
 
 console.log("scoring rules: all asserts pass\n");
