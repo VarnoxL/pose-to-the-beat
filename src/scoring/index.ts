@@ -108,11 +108,20 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
     for (let i = deck.length - 1; i >= 0; i--) if (deck[i].id !== lastId && ok(deck[i])) return deck.splice(i, 1)[0];
   };
 
-  const deal = (): MoveDef => {
+  /** A trap must be clearly away from standing still and from the move before it: holding still is the rule. */
+  const fairTrap = (def: MoveDef) =>
+    poseDistance(def.target, config.standingPose) >= config.trapMinDistanceDeg &&
+    (!lastTarget || poseDistance(def.target, lastTarget) >= config.trapMinDistanceDeg);
+
+  /**
+   * Deal the next move. For a trap, take the first card in this pass that makes a fair trap; null if there's none, and
+   * the move is sung instead. Moves the camera can't judge right now (e.g. leg moves with knees out of frame) are
+   * skipped. If none is left in this pass, start a fresh one; if the camera can judge nothing at all, deal anyway.
+   */
+  const deal = (trap: boolean): MoveDef | null => {
     if (!deck.length) shuffle();
-    // Skip moves the camera can't judge right now (e.g. leg moves when knees are out of frame). If none is left in
-    // this pass, start a fresh pass; if the camera can judge nothing at all, deal anyway.
-    let def = pick(canJudge);
+    let def = pick((d) => canJudge(d) && (!trap || fairTrap(d)));
+    if (trap && !def) return null;
     if (!def) {
       shuffle();
       def = pick(canJudge) ?? pick(() => true) ?? deck.pop()!;
@@ -120,11 +129,6 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
     lastId = def.id;
     return def;
   };
-
-  /** A trap must be clearly away from standing still and from the move before it: holding still is the rule. */
-  const fairTrap = (def: MoveDef) =>
-    poseDistance(def.target, config.standingPose) >= config.trapMinDistanceDeg &&
-    (!lastTarget || poseDistance(def.target, lastTarget) >= config.trapMinDistanceDeg);
 
   return {
     get state() { return state; },
@@ -136,8 +140,11 @@ export function createScoring(moves: MoveDef[], rand: () => number = Math.random
     },
 
     nextMove(beat) {
-      const def = deal();
-      const trap = moveCount >= config.noTrapsBeforeMove && rand() < config.trapChance && fairTrap(def);
+      // Roll the trap first, then find a card that makes a fair one, so traps stay at trapChance.
+      const wantTrap = moveCount >= config.noTrapsBeforeMove && rand() < config.trapChance;
+      const trapDef = wantTrap ? deal(true) : null;
+      const def = trapDef ?? deal(false)!;
+      const trap = !!trapDef;
       lastTarget = def.target;
       moveCount++;
       return { id: def.id, beat, target: def.target, cue: trap ? "trap" : "sing" };
