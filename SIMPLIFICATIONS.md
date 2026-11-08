@@ -13,3 +13,4 @@ Every shortcut we take, so Q&A answers stay honest. One line each: what, why, an
 - MediaPipe runs on the CPU delegate, not GPU: on the dev laptop GPU (WebGL) took 110 ms/frame vs 40 ms on CPU. Webcam asks for 640x360 instead of 720p for the same reason. No auto-pick between them. (Vision, hour 1)
 - In bot mode the one human is always slot 0 (left); if two people are on camera, the left one plays. (Game, hour 1)
 - Scoring's move list is hardcoded in `src/scoring/index.ts` (static hosting can't list a folder); add the id there when adding a move file. (Scoring, hour 18)
+- Moves the camera cannot judge for a player (their key joints are not visible, e.g. leg moves with knees out of frame) are skipped when dealing, instead of being graded on the joints that are visible. With no full-body framing, right_knee and sumo_squat never come up. (Scoring, playtest 1)
