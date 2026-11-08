@@ -9,4 +9,4 @@ Every free asset and its license. AI-written code is disclosed on the itch page;
 | Welcome-screen music (`audio/title.mp3`, from dance-game-music.wav) | assets.iDevGames.co.uk | iDev | Free license |
 | Neon notes image (`images/neon-notes.png`) | Supplied by the team | Idalba Granada | Free license |
 | Round music "Amusement" (`audio/game.mp3`) | Pixabay | Mohamed Hassan (mohamed_hassan) | Pixabay Content License (check the track page) |
-| Title screen art (`images/title.webp`) | Team-made; speaker + splatter background is stock art | Team; stock artist TODO | TODO: stock license (the current file still shows a stock watermark) |
+| Title screen art (`images/title.webp`) | Team-made; speaker + splatter background is Adobe Stock art | Team; background by PicsElle Creations | Adobe Stock Standard license |
