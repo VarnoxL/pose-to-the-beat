@@ -45,11 +45,11 @@ export const config = {
   // Tempo tiers follow the LEADER's flow; changes only land on a measure boundary
   beatsPerMeasure: 4,
   tempoTiers: [
-    { bpm: 78, minFlow: 0 },
-    { bpm: 86, minFlow: 0.2 },
-    { bpm: 100, minFlow: 0.4 },
-    { bpm: 107, minFlow: 0.6 },
-    { bpm: 132, minFlow: 0.8 },
+    { bpm: 84, minFlow: 0 },
+    { bpm: 100, minFlow: 0.2 },
+    { bpm: 116, minFlow: 0.4 },
+    { bpm: 132, minFlow: 0.6 },
+    { bpm: 152, minFlow: 0.8 },
   ],
 
   // Vision
